@@ -1,0 +1,13 @@
+{
+  "name": "@marfia/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./game-presets": "./src/game-presets.ts",
+    "./socket-events": "./src/socket-events.ts"
+  },
+  "dependencies": {
+    "zod": "^4.5.4"
+  }
+}
