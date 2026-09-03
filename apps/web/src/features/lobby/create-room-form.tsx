@@ -3,19 +3,17 @@ import { useState, type FormEvent } from 'react';
 export interface CreateRoomValues {
   nickname: string;
   name: string;
-  maxPlayers: number;
   timerSeconds: number;
 }
 
 export function CreateRoomForm({ onCreate }: { onCreate: (values: CreateRoomValues) => void }) {
   const [nickname, setNickname] = useState('');
   const [name, setName] = useState('');
-  const [maxPlayers, setMaxPlayers] = useState(8);
   const [timerSeconds, setTimerSeconds] = useState(60);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    onCreate({ nickname, name, maxPlayers, timerSeconds });
+    onCreate({ nickname, name, timerSeconds });
   }
 
   return (
@@ -27,10 +25,6 @@ export function CreateRoomForm({ onCreate }: { onCreate: (values: CreateRoomValu
       <label>
         방 이름
         <input maxLength={60} onChange={(event) => setName(event.target.value)} required value={name} />
-      </label>
-      <label>
-        최대 인원
-        <input max="20" min="4" onChange={(event) => setMaxPlayers(Number(event.target.value))} type="number" value={maxPlayers} />
       </label>
       <label>
         단계 시간(초)

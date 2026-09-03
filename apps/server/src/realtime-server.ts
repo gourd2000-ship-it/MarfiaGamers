@@ -129,7 +129,12 @@ export async function createRealtimeServer(
       }
 
       try {
-        const room = rooms.create({ ...parsed.data, host: { id: socket.id, nickname: parsed.data.nickname } });
+        const roomInput = {
+          name: parsed.data.name,
+          nickname: parsed.data.nickname,
+          timerSeconds: parsed.data.timerSeconds
+        };
+        const room = rooms.create({ ...roomInput, host: { id: socket.id, nickname: roomInput.nickname } });
         socket.join(room.code);
         respond({ ok: true, room: toRoomSummary(room), inviteToken: room.inviteToken });
         io.to(room.code).emit(SOCKET_EVENTS.roomState, toPublicRoomState(room));

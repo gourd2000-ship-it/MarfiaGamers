@@ -18,7 +18,6 @@ describe('CreateRoomForm', () => {
     expect(onCreate).toHaveBeenCalledWith({
       nickname: '방장',
       name: '1학년 2반',
-      maxPlayers: 8,
       timerSeconds: 60
     });
   });

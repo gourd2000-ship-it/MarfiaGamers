@@ -12,7 +12,6 @@ const createFourPlayerRoom = () => {
     code: 'ABCD12',
     inviteToken: '0123456789abcdef0123456789abcdef',
     name: '1학년 2반',
-    maxPlayers: 6,
     timerSeconds: 60,
     host: { id: 'host', nickname: '방장' }
   });
@@ -63,5 +62,32 @@ describe('room session', () => {
 
     expect(() => closeRoom(room, 'p2')).toThrow('Only the host');
     expect(closeRoom(room, 'host')).toMatchObject({ status: 'closed' });
+  });
+});
+
+describe('fixed room capacity', () => {
+  it('always creates a room with a twenty-player limit', () => {
+    const room = createRoom({
+      code: 'CAP20',
+      inviteToken: '0123456789abcdef0123456789abcdef',
+      name: '20명 방',
+      timerSeconds: 60,
+      host: { id: 'host', nickname: '방장' }
+    });
+
+    expect(room.maxPlayers).toBe(20);
+  });
+
+  it('allows a host to start as soon as a second active player joins', () => {
+    const room = createRoom({
+      code: 'TWO001',
+      inviteToken: '0123456789abcdef0123456789abcdef',
+      name: '2명 방',
+      timerSeconds: 60,
+      host: { id: 'host', nickname: '방장' }
+    });
+    const withGuest = joinRoom(room, { id: 'guest', nickname: '손님' });
+
+    expect(startRoom(withGuest, 'host')).toMatchObject({ status: 'in-game' });
   });
 });

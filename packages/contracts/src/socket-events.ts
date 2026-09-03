@@ -20,7 +20,8 @@ export const SOCKET_EVENTS = {
 
 export const createRoomSchema = z.object({
   name: z.string().trim().min(1).max(60),
-  maxPlayers: z.number().int().min(4).max(20),
+  // Kept optional for clients running an older web build. The server always uses 20.
+  maxPlayers: z.number().int().min(2).max(20).optional(),
   timerSeconds: z.number().int().min(10).max(600),
   nickname: z.string().trim().min(1).max(12)
 });

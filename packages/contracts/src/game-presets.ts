@@ -16,9 +16,12 @@ export interface RolePreset {
   citizen: number;
 }
 
+export const MIN_GAME_PLAYERS = 2;
+export const MAX_GAME_PLAYERS = 20;
+
 export function createRolePreset(playerCount: number): RolePreset {
-  if (!Number.isInteger(playerCount) || playerCount < 4 || playerCount > 20) {
-    throw new Error('Player count must be from 4 to 20.');
+  if (!Number.isInteger(playerCount) || playerCount < MIN_GAME_PLAYERS || playerCount > MAX_GAME_PLAYERS) {
+    throw new Error(`Player count must be from ${MIN_GAME_PLAYERS} to ${MAX_GAME_PLAYERS}.`);
   }
 
   const mafia =

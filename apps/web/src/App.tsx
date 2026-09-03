@@ -178,7 +178,7 @@ export function App() {
 
     socketRef.current.emit(SOCKET_EVENTS.roomStart, { roomId: room.code }, (response: StartRoomResponse) => {
       if (!response.ok) {
-        setError('게임을 시작할 수 없습니다. 4명 이상인지 확인해 주세요.');
+        setError('게임을 시작할 수 없습니다. 2명 이상인지 확인해 주세요.');
         return;
       }
 
@@ -308,7 +308,7 @@ export function App() {
       <ConnectionStatus state={connectionState} />
       {room ? (
         <>
-          <p>{room.name} 방이 만들어졌습니다. 친구가 4명 이상 모이면 게임을 시작할 수 있습니다.</p>
+          <p>{room.name} 방이 만들어졌습니다. 친구가 2명 이상 모이면 게임을 시작할 수 있습니다.</p>
           <p>현재 입장 인원: {room.playerCount}명</p>
           {privateRole ? <RoleCard role={privateRole} /> : null}
           {gamePhase ? <PhaseStatus phase={gamePhase} /> : null}
@@ -348,7 +348,7 @@ export function App() {
           ) : null}
           {inviteToken ? <InviteCard inviteToken={inviteToken} origin={window.location.origin} roomCode={room.code} /> : null}
           {isHost && room.status === 'lobby' ? (
-            <button disabled={room.playerCount < 4} onClick={startRoom} type="button">
+            <button disabled={room.playerCount < 2} onClick={startRoom} type="button">
               게임 시작
             </button>
           ) : null}

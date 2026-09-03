@@ -43,9 +43,9 @@
 
 | 이벤트 | payload | 허용 조건 |
 | --- | --- | --- |
-| `room:create` | `{ name, maxPlayers, timerSeconds, nickname }` | 누구나, 4~20명 설정 |
+| `room:create` | `{ name, timerSeconds, nickname }` | 누구나. 방 정원은 서버가 20명으로 고정 |
 | `room:join` | `{ roomId, inviteToken, nickname }` | 로비·정원 전, 초대 토큰 일치 |
-| `room:start` | `{ roomId }` | 방장, 활성 4명 이상 |
+| `room:start` | `{ roomId }` | 방장, 활성 2명 이상 |
 | `room:rematch` | `{ roomId }` | 방장, `result` 단계. 현재 연결된 참가자로 새 역할을 자동 배정 |
 | `room:close` | `{ roomId }` | 방장. 메모리 방·게임 상태 삭제 |
 | `game:mafia-target` | `{ roomId, targetPlayerId }` | 살아 있는 마피아, `night-mafia` |

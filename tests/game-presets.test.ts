@@ -15,6 +15,16 @@ describe('createRolePreset', () => {
     });
   });
 
+  it('assigns one mafia and one citizen to a two-player game', () => {
+    expect(createRolePreset(2)).toEqual({
+      playerCount: 2,
+      mafia: 1,
+      doctor: 0,
+      police: 0,
+      citizen: 1
+    });
+  });
+
   it('adds one police officer but no doctor to a five-player game', () => {
     expect(createRolePreset(5)).toEqual({
       playerCount: 5,
@@ -31,8 +41,8 @@ describe('createRolePreset', () => {
   });
 
   it('rejects player counts outside the supported range', () => {
-    expect(() => createRolePreset(3)).toThrow('4 to 20');
-    expect(() => createRolePreset(21)).toThrow('4 to 20');
+    expect(() => createRolePreset(1)).toThrow('2 to 20');
+    expect(() => createRolePreset(21)).toThrow('2 to 20');
   });
 });
 

@@ -22,7 +22,6 @@ export interface CreateRoomInput {
   code: string;
   inviteToken: string;
   name: string;
-  maxPlayers: number;
   timerSeconds: number;
   host: { id: string; nickname: string };
 }
@@ -37,9 +36,6 @@ export function createRoom(input: CreateRoomInput): RoomSession {
   if (!input.name.trim()) {
     throw new Error('Room name is required.');
   }
-  if (!Number.isInteger(input.maxPlayers) || input.maxPlayers < 4 || input.maxPlayers > 20) {
-    throw new Error('Maximum players must be from 4 to 20.');
-  }
   if (!Number.isInteger(input.timerSeconds) || input.timerSeconds < 10) {
     throw new Error('Timer must be at least 10 seconds.');
   }
@@ -48,7 +44,7 @@ export function createRoom(input: CreateRoomInput): RoomSession {
     code: input.code,
     inviteToken: input.inviteToken,
     name: input.name.trim(),
-    maxPlayers: input.maxPlayers,
+    maxPlayers: MAX_GAME_PLAYERS,
     timerSeconds: input.timerSeconds,
     status: 'lobby',
     players: [{ ...input.host, nickname: normalizeNickname(input.host.nickname), status: 'active', isHost: true }]
@@ -113,8 +109,8 @@ export function startRoom(room: RoomSession, playerId: string): RoomSession {
   if (room.status !== 'lobby') {
     throw new Error('The game has already started.');
   }
-  if (room.players.filter((candidate) => candidate.status === 'active').length < 4) {
-    throw new Error('At least four active players are required.');
+  if (room.players.filter((candidate) => candidate.status === 'active').length < MIN_GAME_PLAYERS) {
+    throw new Error(`At least ${MIN_GAME_PLAYERS} active players are required.`);
   }
 
   return { ...room, status: 'in-game' };
@@ -136,3 +132,4 @@ function normalizeNickname(nickname: string): string {
   }
   return normalized;
 }
+import { MAX_GAME_PLAYERS, MIN_GAME_PLAYERS } from '@marfia/contracts/game-presets';

@@ -29,7 +29,6 @@ test('four browsers receive private roles and complete an automatic round throug
     await expect(page.getByRole('status')).toHaveText('실시간 서버에 연결됨');
     await page.getByLabel('내 별명').fill('방장');
     await page.getByLabel('방 이름').fill('전체 게임 방');
-    await page.getByLabel('최대 인원').fill('4');
     await page.getByLabel('단계 시간(초)').fill('10');
     await page.getByRole('button', { name: '방 만들기' }).click();
     const inviteUrl = await page.getByLabel('초대 링크').inputValue();
