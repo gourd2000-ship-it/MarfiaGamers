@@ -179,10 +179,10 @@ describe('day vote', () => {
     const revote = resolveDayVote(tied);
     const tiedAgain = ['p1', 'p1', 'p2', 'p2'].reduce(
       (game, targetId, index) => submitDayVote(game, fourPlayers[index].id, targetId),
-      { ...revote, dayVotes: {} }
+      revote
     );
 
-    expect(revote).toMatchObject({ phase: 'day-revote', dayVoteResult: { requiresRevote: true } });
+    expect(revote).toMatchObject({ phase: 'day-revote', dayVotes: {}, dayVoteResult: { requiresRevote: true } });
     expect(resolveDayVote(tiedAgain).dayVoteResult).toMatchObject({
       eliminatedPlayerId: null,
       requiresRevote: false

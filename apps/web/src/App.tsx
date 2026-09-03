@@ -30,10 +30,13 @@ import { ResultControls } from './features/game/result-controls.js';
 import { PhaseCountdown } from './features/game/phase-countdown.js';
 import { MafiaTeamNotice } from './features/game/mafia-team-notice.js';
 import { GamePlayerList } from './features/game/game-player-list.js';
+import { VoteResultNotice } from './features/game/vote-result-notice.js';
 
 export function App() {
   const socketUrl = import.meta.env.VITE_SOCKET_URL ?? window.location.origin;
   const socketRef = useRef<Socket<ServerToClientEvents, ClientToServerEvents> | null>(null);
+  const latestRevisionRef = useRef(0);
+  const hadRoomRef = useRef(false);
   const [connectionState, setConnectionState] = useState<ConnectionState>('connecting');
   const [room, setRoom] = useState<RoomSummary | null>(null);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
@@ -46,45 +49,82 @@ export function App() {
   const [policeResult, setPoliceResult] = useState<{ targetPlayerId: string; alignment: 'mafia' | 'citizen' } | null>(null);
   const [winner, setWinner] = useState<PublicGameState['winner'] | null>(null);
   const [eliminatedPlayerId, setEliminatedPlayerId] = useState<string | null>(null);
+  const [voteTotals, setVoteTotals] = useState<Readonly<Record<string, number>> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const inviteRoomCode = roomCodeFromPath(window.location.pathname);
   const inviteTokenFromUrl = new URLSearchParams(window.location.search).get('token');
+
+  function resetRoomState(message: string) {
+    hadRoomRef.current = false;
+    latestRevisionRef.current = 0;
+    setRoom(null);
+    setInviteToken(null);
+    setIsHost(false);
+    setPrivateRole(null);
+    setMafiaPlayerIds([]);
+    setGamePhase(null);
+    setPhaseEndsAt(null);
+    setGamePlayers([]);
+    setPoliceResult(null);
+    setWinner(null);
+    setEliminatedPlayerId(null);
+    setVoteTotals(null);
+    setError(message);
+    window.history.replaceState({}, '', '/');
+  }
 
   useEffect(() => {
     const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(socketUrl);
     socketRef.current = socket;
     const onConnect = () => setConnectionState('connected');
-    const onDisconnect = () => setConnectionState('reconnecting');
+    const onDisconnect = () => {
+      setConnectionState('reconnecting');
+      if (hadRoomRef.current) {
+        resetRoomState('연결이 끊어져 자동 기권 처리되었습니다. 새 방에 참여해 주세요.');
+      }
+    };
     const onConnectError = () => setConnectionState('error');
     const onRoomState = (nextRoom: PublicRoomState) => {
       if (nextRoom.status === 'closed') {
-        setRoom(null);
-        setInviteToken(null);
-        setIsHost(false);
-        setPrivateRole(null);
-        setMafiaPlayerIds([]);
-        setGamePhase(null);
-        setPhaseEndsAt(null);
-        setGamePlayers([]);
-        setWinner(null);
-        setEliminatedPlayerId(null);
-        setError('방이 종료되었습니다. 새 방을 만들어 주세요.');
-        window.history.replaceState({}, '', '/');
+        resetRoomState('방이 종료되었습니다. 새 방을 만들어 주세요.');
         return;
       }
 
+      hadRoomRef.current = true;
       setRoom(nextRoom);
+      setIsHost(nextRoom.players.some((player) =>
+        player.id === socket.id && player.status === 'active' && player.isHost
+      ));
     };
     const onPrivateRole = ({ role, mafiaPlayerIds: nextMafiaPlayerIds }: PrivateRole) => {
       setPrivateRole(role);
       setMafiaPlayerIds(nextMafiaPlayerIds ?? []);
     };
-    const onPublicGameState = ({ phase, phaseEndsAt: nextPhaseEndsAt, players, winner: nextWinner, eliminatedPlayerId: nextEliminatedPlayerId }: PublicGameState) => {
+    const onPublicGameState = ({
+      revision,
+      phase,
+      phaseEndsAt: nextPhaseEndsAt,
+      players,
+      winner: nextWinner,
+      eliminatedPlayerId: nextEliminatedPlayerId,
+      voteTotals: nextVoteTotals
+    }: PublicGameState) => {
+      if (revision < latestRevisionRef.current) {
+        return;
+      }
+
+      latestRevisionRef.current = revision;
+      if (phase === 'role-reveal') {
+        setPrivateRole(null);
+        setMafiaPlayerIds([]);
+        setPoliceResult(null);
+      }
       setGamePhase(phase);
       setPhaseEndsAt(nextPhaseEndsAt);
       setGamePlayers(players);
       setWinner(nextWinner ?? null);
       setEliminatedPlayerId(nextEliminatedPlayerId ?? null);
+      setVoteTotals(nextVoteTotals ?? null);
     };
     const onPrivateInvestigation = (result: { targetPlayerId: string; alignment: 'mafia' | 'citizen' }) => {
       setPoliceResult(result);
@@ -127,6 +167,7 @@ export function App() {
       setRoom(response.room);
       setInviteToken(response.inviteToken);
       setIsHost(true);
+      hadRoomRef.current = true;
     });
   }
 
@@ -161,6 +202,7 @@ export function App() {
       setIsHost(false);
       setRoom(response.room);
       setInviteToken(values.inviteToken);
+      hadRoomRef.current = true;
     });
   }
 
@@ -275,6 +317,7 @@ export function App() {
           {winner ? <GameResultPanel winner={winner} /> : null}
           {isHost && gamePhase === 'result' ? <ResultControls onClose={closeRoom} onRematch={rematch} /> : null}
           {eliminatedNickname ? <EliminationNotice nickname={eliminatedNickname} /> : null}
+          {voteTotals ? <VoteResultNotice players={gamePlayers} voteTotals={voteTotals} /> : null}
           {privateRole === 'mafia' ? <MafiaTeamNotice mafiaPlayerIds={mafiaPlayerIds} players={gamePlayers} /> : null}
           {privateRole === 'mafia' && gamePhase === 'night-mafia' ? (
             <MafiaTargetPicker excludedPlayerIds={mafiaPlayerIds} onSelect={submitMafiaTarget} players={gamePlayers} />

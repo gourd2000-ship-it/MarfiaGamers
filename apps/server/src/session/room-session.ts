@@ -89,17 +89,25 @@ export function resignPlayer(room: RoomSession, playerId: string): RoomSession {
     throw new Error('Player is not in this room.');
   }
 
+  const nextHostId = player.isHost
+    ? room.players.find((candidate) => candidate.id !== playerId && candidate.status === 'active')?.id
+    : undefined;
+
   return {
     ...room,
     players: room.players.map((candidate) =>
-      candidate.id === playerId ? { ...candidate, status: 'resigned' } : candidate
+      candidate.id === playerId
+        ? { ...candidate, status: 'resigned', isHost: false }
+        : candidate.id === nextHostId
+          ? { ...candidate, isHost: true }
+          : candidate
     )
   };
 }
 
 export function startRoom(room: RoomSession, playerId: string): RoomSession {
   const player = room.players.find((candidate) => candidate.id === playerId);
-  if (!player?.isHost) {
+  if (!player?.isHost || player.status !== 'active') {
     throw new Error('Only the host can start the game.');
   }
   if (room.status !== 'lobby') {
@@ -114,7 +122,7 @@ export function startRoom(room: RoomSession, playerId: string): RoomSession {
 
 export function closeRoom(room: RoomSession, playerId: string): RoomSession {
   const player = room.players.find((candidate) => candidate.id === playerId);
-  if (!player?.isHost) {
+  if (!player?.isHost || player.status !== 'active') {
     throw new Error('Only the host can close the room.');
   }
 

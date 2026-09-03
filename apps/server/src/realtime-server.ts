@@ -121,26 +121,28 @@ export async function createRealtimeServer(
     });
 
     socket.on(SOCKET_EVENTS.roomCreate, (payload, acknowledge) => {
+      const respond = safelyAcknowledge(acknowledge);
       const parsed = createRoomSchema.safeParse(payload);
       if (!parsed.success) {
-        acknowledge({ ok: false, code: 'invalid-payload' });
+        respond({ ok: false, code: 'invalid-payload' });
         return;
       }
 
       try {
         const room = rooms.create({ ...parsed.data, host: { id: socket.id, nickname: parsed.data.nickname } });
         socket.join(room.code);
-        acknowledge({ ok: true, room: toRoomSummary(room), inviteToken: room.inviteToken });
+        respond({ ok: true, room: toRoomSummary(room), inviteToken: room.inviteToken });
         io.to(room.code).emit(SOCKET_EVENTS.roomState, toPublicRoomState(room));
       } catch {
-        acknowledge({ ok: false, code: 'room-unavailable' });
+        respond({ ok: false, code: 'room-unavailable' });
       }
     });
 
     socket.on(SOCKET_EVENTS.roomJoin, (payload, acknowledge) => {
+      const respond = safelyAcknowledge(acknowledge);
       const parsed = joinRoomSchema.safeParse(payload);
       if (!parsed.success) {
-        acknowledge({ ok: false, code: 'invalid-payload' });
+        respond({ ok: false, code: 'invalid-payload' });
         return;
       }
 
@@ -151,12 +153,12 @@ export async function createRealtimeServer(
           inviteToken: parsed.data.inviteToken
         });
         if (!room) {
-          acknowledge({ ok: false, code: 'room-not-found' });
+          respond({ ok: false, code: 'room-not-found' });
           return;
         }
 
         socket.join(room.code);
-        acknowledge({
+        respond({
           ok: true,
           room: toRoomSummary(room),
           nickname: parsed.data.nickname.trim(),
@@ -164,21 +166,22 @@ export async function createRealtimeServer(
         });
         io.to(room.code).emit(SOCKET_EVENTS.roomState, toPublicRoomState(room));
       } catch {
-        acknowledge({ ok: false, code: 'room-rejected' });
+        respond({ ok: false, code: 'room-rejected' });
       }
     });
 
     socket.on(SOCKET_EVENTS.roomStart, (payload, acknowledge) => {
+      const respond = safelyAcknowledge(acknowledge);
       const parsed = startRoomSchema.safeParse(payload);
       if (!parsed.success) {
-        acknowledge({ ok: false, code: 'invalid-payload' });
+        respond({ ok: false, code: 'invalid-payload' });
         return;
       }
 
       try {
         const room = rooms.start(parsed.data.roomId, socket.id);
         if (!room) {
-          acknowledge({ ok: false, code: 'room-not-found' });
+          respond({ ok: false, code: 'room-not-found' });
           return;
         }
 
@@ -192,27 +195,28 @@ export async function createRealtimeServer(
         revisions.set(room.code, 1);
         const initialPhaseEndsAt = now() + room.timerSeconds * 1000;
         phaseEndsAt.set(room.code, initialPhaseEndsAt);
-        acknowledge({ ok: true, room: toRoomSummary(room) });
+        respond({ ok: true, room: toRoomSummary(room) });
         io.to(room.code).emit(SOCKET_EVENTS.roomState, toPublicRoomState(room));
         io.to(room.code).emit(SOCKET_EVENTS.gamePublicState, toPublicGameState(room, game, 1, initialPhaseEndsAt));
         sendPrivateRoles(room, game);
         scheduleNextPhase(room, 1);
       } catch {
-        acknowledge({ ok: false, code: 'room-rejected' });
+        respond({ ok: false, code: 'room-rejected' });
       }
     });
 
     socket.on(SOCKET_EVENTS.roomClose, (payload, acknowledge) => {
+      const respond = safelyAcknowledge(acknowledge);
       const parsed = closeRoomSchema.safeParse(payload);
       if (!parsed.success) {
-        acknowledge({ ok: false, code: 'invalid-payload' });
+        respond({ ok: false, code: 'invalid-payload' });
         return;
       }
 
       try {
         const room = rooms.close(parsed.data.roomId, socket.id);
         if (!room) {
-          acknowledge({ ok: false, code: 'room-not-found' });
+          respond({ ok: false, code: 'room-not-found' });
           return;
         }
 
@@ -220,16 +224,17 @@ export async function createRealtimeServer(
         revisions.delete(room.code);
         phaseEndsAt.delete(room.code);
         io.to(room.code).emit(SOCKET_EVENTS.roomState, toPublicRoomState(room));
-        acknowledge({ ok: true });
+        respond({ ok: true });
       } catch {
-        acknowledge({ ok: false, code: 'room-rejected' });
+        respond({ ok: false, code: 'room-rejected' });
       }
     });
 
     socket.on(SOCKET_EVENTS.roomRematch, (payload, acknowledge) => {
+      const respond = safelyAcknowledge(acknowledge);
       const parsed = rematchRoomSchema.safeParse(payload);
       if (!parsed.success) {
-        acknowledge({ ok: false, code: 'invalid-payload' });
+        respond({ ok: false, code: 'invalid-payload' });
         return;
       }
 
@@ -237,11 +242,11 @@ export async function createRealtimeServer(
       const previousGame = games.get(parsed.data.roomId);
       const requester = room?.players.find((player) => player.id === socket.id);
       if (!room || !previousGame) {
-        acknowledge({ ok: false, code: 'room-not-found' });
+        respond({ ok: false, code: 'room-not-found' });
         return;
       }
-      if (!requester?.isHost || previousGame.phase !== 'result') {
-        acknowledge({ ok: false, code: 'room-rejected' });
+      if (!requester?.isHost || requester.status !== 'active' || previousGame.phase !== 'result') {
+        respond({ ok: false, code: 'room-rejected' });
         return;
       }
 
@@ -257,67 +262,70 @@ export async function createRealtimeServer(
         revisions.set(room.code, revision);
         const initialPhaseEndsAt = now() + room.timerSeconds * 1000;
         phaseEndsAt.set(room.code, initialPhaseEndsAt);
-        acknowledge({ ok: true, room: toRoomSummary(room) });
+        respond({ ok: true, room: toRoomSummary(room) });
         io.to(room.code).emit(SOCKET_EVENTS.gamePublicState, toPublicGameState(room, game, revision, initialPhaseEndsAt));
         sendPrivateRoles(room, game);
         scheduleNextPhase(room, revision);
       } catch {
-        acknowledge({ ok: false, code: 'room-rejected' });
+        respond({ ok: false, code: 'room-rejected' });
       }
     });
 
     socket.on(SOCKET_EVENTS.gameMafiaTarget, (payload, acknowledge) => {
+      const respond = safelyAcknowledge(acknowledge);
       const parsed = mafiaTargetSchema.safeParse(payload);
       if (!parsed.success) {
-        acknowledge({ ok: false, code: 'invalid-payload' });
+        respond({ ok: false, code: 'invalid-payload' });
         return;
       }
 
       const game = games.get(parsed.data.roomId);
       if (!game) {
-        acknowledge({ ok: false, code: 'game-not-found' });
+        respond({ ok: false, code: 'game-not-found' });
         return;
       }
 
       try {
         games.set(parsed.data.roomId, submitMafiaVote(game, socket.id, parsed.data.targetPlayerId));
-        acknowledge({ ok: true });
+        respond({ ok: true });
       } catch {
-        acknowledge({ ok: false, code: 'command-rejected' });
+        respond({ ok: false, code: 'command-rejected' });
       }
     });
 
     socket.on(SOCKET_EVENTS.gameDoctorProtect, (payload, acknowledge) => {
+      const respond = safelyAcknowledge(acknowledge);
       const parsed = doctorProtectSchema.safeParse(payload);
       if (!parsed.success) {
-        acknowledge({ ok: false, code: 'invalid-payload' });
+        respond({ ok: false, code: 'invalid-payload' });
         return;
       }
 
       const game = games.get(parsed.data.roomId);
       if (!game) {
-        acknowledge({ ok: false, code: 'game-not-found' });
+        respond({ ok: false, code: 'game-not-found' });
         return;
       }
 
       try {
         games.set(parsed.data.roomId, submitDoctorProtection(game, socket.id, parsed.data.targetPlayerId));
-        acknowledge({ ok: true });
+        respond({ ok: true });
       } catch {
-        acknowledge({ ok: false, code: 'command-rejected' });
+        respond({ ok: false, code: 'command-rejected' });
       }
     });
 
     socket.on(SOCKET_EVENTS.gamePoliceInvestigate, (payload, acknowledge) => {
+      const respond = safelyAcknowledge(acknowledge);
       const parsed = policeInvestigateSchema.safeParse(payload);
       if (!parsed.success) {
-        acknowledge({ ok: false, code: 'invalid-payload' });
+        respond({ ok: false, code: 'invalid-payload' });
         return;
       }
 
       const game = games.get(parsed.data.roomId);
       if (!game) {
-        acknowledge({ ok: false, code: 'game-not-found' });
+        respond({ ok: false, code: 'game-not-found' });
         return;
       }
 
@@ -332,30 +340,31 @@ export async function createRealtimeServer(
           targetPlayerId: result.targetId,
           alignment: result.alignment
         });
-        acknowledge({ ok: true });
+        respond({ ok: true });
       } catch {
-        acknowledge({ ok: false, code: 'command-rejected' });
+        respond({ ok: false, code: 'command-rejected' });
       }
     });
 
     socket.on(SOCKET_EVENTS.gameDayVote, (payload, acknowledge) => {
+      const respond = safelyAcknowledge(acknowledge);
       const parsed = dayVoteSchema.safeParse(payload);
       if (!parsed.success) {
-        acknowledge({ ok: false, code: 'invalid-payload' });
+        respond({ ok: false, code: 'invalid-payload' });
         return;
       }
 
       const game = games.get(parsed.data.roomId);
       if (!game) {
-        acknowledge({ ok: false, code: 'game-not-found' });
+        respond({ ok: false, code: 'game-not-found' });
         return;
       }
 
       try {
         games.set(parsed.data.roomId, submitDayVote(game, socket.id, parsed.data.targetPlayerId));
-        acknowledge({ ok: true });
+        respond({ ok: true });
       } catch {
-        acknowledge({ ok: false, code: 'command-rejected' });
+        respond({ ok: false, code: 'command-rejected' });
       }
     });
 
@@ -426,6 +435,12 @@ function toAllowedOrigins(origin: string | readonly string[] | undefined): Set<s
   return new Set(typeof origin === 'string' ? [origin] : origin);
 }
 
+function safelyAcknowledge<T>(
+  acknowledge: ((response: T) => void) | undefined
+): (response: T) => void {
+  return typeof acknowledge === 'function' ? acknowledge : () => undefined;
+}
+
 function toPublicGameState(
   room: RoomSession,
   game: GameState,
@@ -452,7 +467,11 @@ function toPublicGameState(
       isHost: player.isHost
     }))
   };
-  if (game.dayVoteResult && (game.phase === 'night-mafia' || (game.phase === 'result' && !game.nightResult))) {
+  if (game.dayVoteResult && (
+    game.phase === 'day-revote'
+    || game.phase === 'night-mafia'
+    || (game.phase === 'result' && !game.nightResult)
+  )) {
     publicState.voteTotals = game.dayVoteResult.voteTotals;
     publicState.eliminatedPlayerId = game.dayVoteResult.eliminatedPlayerId;
   }

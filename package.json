@@ -9,7 +9,9 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
+    "build:vercel": "npm run build -w @marfia/web",
     "dev": "concurrently -n server,web -c blue,green \"npm run dev -w @marfia/server\" \"npm run dev -w @marfia/web\"",
+    "start:minipc": "powershell -ExecutionPolicy Bypass -File scripts/start-minipc-server.ps1",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",

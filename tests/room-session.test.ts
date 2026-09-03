@@ -45,6 +45,19 @@ describe('room session', () => {
     expect(() => joinRoom(resigned, { id: 'p3', nickname: '바다' })).toThrow('cannot rejoin');
   });
 
+  it('transfers host authority to the first remaining active player when the host disconnects', () => {
+    const room = joinRoom(createFourPlayerRoom(), { id: 'p5', nickname: '새벽' });
+
+    const resigned = resignPlayer(room, 'host');
+
+    expect(resigned.players.find((player) => player.id === 'host')).toMatchObject({
+      status: 'resigned',
+      isHost: false
+    });
+    expect(resigned.players.find((player) => player.id === 'p2')).toMatchObject({ isHost: true });
+    expect(startRoom(resigned, 'p2')).toMatchObject({ status: 'in-game' });
+  });
+
   it('allows only the host to close a room and marks it closed', () => {
     const room = createFourPlayerRoom();
 

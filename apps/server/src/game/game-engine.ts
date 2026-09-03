@@ -228,10 +228,11 @@ export function resolveDayVote(game: GameState): GameState {
   const resolved = {
     ...game,
     dayVoteResult: { eliminatedPlayerId, voteTotals, requiresRevote },
-    eliminatedPlayerIds: addEliminatedPlayer(game.eliminatedPlayerIds, eliminatedPlayerId)
+    eliminatedPlayerIds: addEliminatedPlayer(game.eliminatedPlayerIds, eliminatedPlayerId),
+    nightResult: undefined
   };
   if (requiresRevote) {
-    return { ...resolved, phase: 'day-revote' };
+    return { ...resolved, phase: 'day-revote', dayVotes: {} };
   }
 
   const winner = getWinner(resolved);

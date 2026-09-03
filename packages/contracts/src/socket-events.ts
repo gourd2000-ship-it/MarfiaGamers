@@ -134,39 +134,39 @@ export type GameCommandResponse =
 export interface ClientToServerEvents {
   'room:create': (
     payload: unknown,
-    acknowledge: (response: CreateRoomResponse) => void
+    acknowledge?: (response: CreateRoomResponse) => void
   ) => void;
   'room:join': (
     payload: unknown,
-    acknowledge: (response: JoinRoomResponse) => void
+    acknowledge?: (response: JoinRoomResponse) => void
   ) => void;
   'room:start': (
     payload: unknown,
-    acknowledge: (response: StartRoomResponse) => void
+    acknowledge?: (response: StartRoomResponse) => void
   ) => void;
   'room:close': (
     payload: unknown,
-    acknowledge: (response: CloseRoomResponse) => void
+    acknowledge?: (response: CloseRoomResponse) => void
   ) => void;
   'room:rematch': (
     payload: unknown,
-    acknowledge: (response: StartRoomResponse) => void
+    acknowledge?: (response: StartRoomResponse) => void
   ) => void;
   'game:mafia-target': (
     payload: unknown,
-    acknowledge: (response: GameCommandResponse) => void
+    acknowledge?: (response: GameCommandResponse) => void
   ) => void;
   'game:doctor-protect': (
     payload: unknown,
-    acknowledge: (response: GameCommandResponse) => void
+    acknowledge?: (response: GameCommandResponse) => void
   ) => void;
   'game:police-investigate': (
     payload: unknown,
-    acknowledge: (response: GameCommandResponse) => void
+    acknowledge?: (response: GameCommandResponse) => void
   ) => void;
   'game:day-vote': (
     payload: unknown,
-    acknowledge: (response: GameCommandResponse) => void
+    acknowledge?: (response: GameCommandResponse) => void
   ) => void;
 }
 
