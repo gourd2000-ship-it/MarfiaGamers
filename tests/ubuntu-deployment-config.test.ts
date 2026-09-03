@@ -12,11 +12,17 @@ describe('Ubuntu direct deployment configuration', () => {
       resolve(process.cwd(), 'deployment/ubuntu/marfia-server.service'),
       'utf8'
     );
+    const guide = await readFile(
+      resolve(process.cwd(), 'deployment/ubuntu/README.md'),
+      'utf8'
+    );
 
     expect(caddyfile).toContain('marfia-class.duckdns.org');
     expect(caddyfile).toContain('reverse_proxy 127.0.0.1:3100');
     expect(caddyfile).toContain('root * /srv/marfia/web');
     expect(service).toContain('EnvironmentFile=/etc/marfia/server.env');
     expect(service).toContain('NoNewPrivileges=true');
+    expect(guide).toContain('/etc/caddy/sites-enabled/marfia.caddy');
+    expect(guide).not.toContain('deployment/ubuntu/Caddyfile /etc/caddy/Caddyfile');
   });
 });

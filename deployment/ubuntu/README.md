@@ -33,14 +33,30 @@ sudo rsync -a --delete apps/web/dist/ /srv/marfia/web/
 
 ## 3. 서비스와 HTTPS 프록시
 
+이미 다른 Caddy 사이트가 운영 중이면 `/etc/caddy/Caddyfile`을 덮어쓰면 안 된다. 사이트별 설정을 별도 파일로 두고 기존 Caddyfile에서 한 번만 import한다.
+
 ```bash
 sudo install -d -m 750 -o root -g marfia /etc/marfia
 sudo install -m 640 -o root -g marfia deployment/ubuntu/server.env /etc/marfia/server.env
 sudo install -m 644 deployment/ubuntu/marfia-server.service /etc/systemd/system/marfia-server.service
-sudo install -m 644 deployment/ubuntu/Caddyfile /etc/caddy/Caddyfile
-sudo systemctl daemon-reload
-sudo systemctl enable --now marfia-server caddy
+sudo install -d -m 755 -o root -g root /etc/caddy/sites-enabled
+sudo install -m 644 deployment/ubuntu/Caddyfile /etc/caddy/sites-enabled/marfia.caddy
+sudoedit /etc/caddy/Caddyfile
+```
+
+`sudoedit`로 연 기존 Caddyfile의 마지막에 아래 줄을 추가한다. 이미 같은 줄이 있으면 추가하지 않는다.
+
+```caddyfile
+import /etc/caddy/sites-enabled/*
+```
+
+그 뒤 설정을 검증한 후 Caddy를 reload한다.
+
+```bash
 sudo caddy validate --config /etc/caddy/Caddyfile
+sudo systemctl daemon-reload
+sudo systemctl enable --now marfia-server
+sudo systemctl reload caddy
 ```
 
 `WEB_ORIGIN`은 `https://marfia-class.duckdns.org`와 정확히 일치해야 한다. 공개 전에 `curl http://127.0.0.1:3100/health`와 `systemctl status marfia-server caddy`로 확인한다.
