@@ -1,6 +1,6 @@
 # Ubuntu 직접 배포
 
-이 구성은 Caddy만 인터넷에 공개하고 Node.js/Socket.IO 서버는 `127.0.0.1:3000`에서만 실행한다. 공유기에는 TCP 80과 443만 미니 PC로 전달한다.
+이 구성은 Caddy만 인터넷에 공개하고 Node.js/Socket.IO 서버는 `127.0.0.1:3100`에서만 실행한다. 공유기에는 TCP 80과 443만 미니 PC로 전달한다.
 
 ## 1. 서버 준비
 
@@ -43,7 +43,7 @@ sudo systemctl enable --now marfia-server caddy
 sudo caddy validate --config /etc/caddy/Caddyfile
 ```
 
-`WEB_ORIGIN`은 `https://marfia-class.duckdns.org`와 정확히 일치해야 한다. 공개 전에 `curl http://127.0.0.1:3000/health`와 `systemctl status marfia-server caddy`로 확인한다.
+`WEB_ORIGIN`은 `https://marfia-class.duckdns.org`와 정확히 일치해야 한다. 공개 전에 `curl http://127.0.0.1:3100/health`와 `systemctl status marfia-server caddy`로 확인한다.
 
 ## 4. 방화벽과 공유기
 

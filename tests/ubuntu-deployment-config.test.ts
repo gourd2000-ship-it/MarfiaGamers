@@ -14,7 +14,7 @@ describe('Ubuntu direct deployment configuration', () => {
     );
 
     expect(caddyfile).toContain('marfia-class.duckdns.org');
-    expect(caddyfile).toContain('reverse_proxy 127.0.0.1:3000');
+    expect(caddyfile).toContain('reverse_proxy 127.0.0.1:3100');
     expect(caddyfile).toContain('root * /srv/marfia/web');
     expect(service).toContain('EnvironmentFile=/etc/marfia/server.env');
     expect(service).toContain('NoNewPrivileges=true');

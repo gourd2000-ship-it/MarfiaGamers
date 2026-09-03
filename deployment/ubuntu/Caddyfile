@@ -12,11 +12,11 @@ marfia-class.duckdns.org {
   }
 
   handle /socket.io/* {
-    reverse_proxy 127.0.0.1:3000
+    reverse_proxy 127.0.0.1:3100
   }
 
   handle /health {
-    reverse_proxy 127.0.0.1:3000
+    reverse_proxy 127.0.0.1:3100
   }
 
   handle {
