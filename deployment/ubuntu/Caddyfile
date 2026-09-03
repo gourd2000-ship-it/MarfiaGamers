@@ -1,0 +1,27 @@
+marfia-class.duckdns.org {
+  encode zstd gzip
+
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "DENY"
+    Referrer-Policy "no-referrer"
+    Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; connect-src 'self' wss://marfia-class.duckdns.org"
+    -Server
+  }
+
+  handle /socket.io/* {
+    reverse_proxy 127.0.0.1:3000
+  }
+
+  handle /health {
+    reverse_proxy 127.0.0.1:3000
+  }
+
+  handle {
+    root * /srv/marfia/web
+    try_files {path} /index.html
+    file_server
+  }
+}

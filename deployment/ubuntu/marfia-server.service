@@ -1,0 +1,23 @@
+[Unit]
+Description=Marfia Gamers Socket.IO server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=marfia
+Group=marfia
+WorkingDirectory=/opt/marfia/app
+Environment=NODE_ENV=production
+EnvironmentFile=/etc/marfia/server.env
+ExecStart=/usr/bin/npm run start -w @marfia/server
+Restart=on-failure
+RestartSec=5s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=full
+UMask=027
+
+[Install]
+WantedBy=multi-user.target

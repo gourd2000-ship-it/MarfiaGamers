@@ -1,5 +1,7 @@
 # 배포와 학교 기기 검증
 
+Ubuntu 미니 PC를 직접 공개하는 배포는 [deployment/ubuntu/README.md](./deployment/ubuntu/README.md)를 따른다. 이 방식은 같은 HTTPS 도메인에서 정적 웹과 Socket.IO를 제공하며, Node.js 포트는 외부에 열지 않는다.
+
 이 프로젝트는 웹 정적 호스팅과 Node.js 실시간 서버를 따로 배포한다. HTTPS 종료는 선택한 호스팅 서비스 또는 리버스 프록시가 담당하며, 브라우저는 HTTPS 페이지에서 WSS로 Socket.IO 서버에 연결한다.
 
 ## 1. 배포 환경 변수
