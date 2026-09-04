@@ -44,10 +44,11 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 .connection-status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
 .connection-status.is-connected { border-color: rgb(97 199 193 / 52%); color: var(--accent); }
 .connection-status.is-error { border-color: rgb(196 59 77 / 62%); color: #ff9fac; }
-.game-status-bar { display: flex; flex: 1 1 auto; justify-content: center; gap: 12px; color: var(--muted); font-size: .875rem; }
+.game-status-bar { display: flex; flex: 1 1 auto; flex-wrap: wrap; justify-content: center; gap: 12px; color: var(--muted); font-size: .875rem; }
 .game-status-bar p { margin: 0; }
 .phase-status { color: var(--text); font-weight: 700; }
 .phase-countdown { color: var(--accent); font-variant-numeric: tabular-nums; }
+.phase-skip { min-height: 34px; padding: 5px 10px; font-size: .8125rem; }
 .app-content { display: grid; justify-items: center; padding-top: clamp(28px, 9vw, 88px); }
 .app-content.has-room { display: block; padding-top: 24px; }
 
@@ -105,7 +106,7 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 .vote-result-notice li { display: flex; justify-content: space-between; border-bottom: 1px solid var(--border); padding: 8px 0; }
 .result-controls { display: grid !important; grid-template-columns: 1fr 1fr; gap: 10px; }
 .button-danger { min-height: 46px; border: 1px solid rgb(196 59 77 / 72%); border-radius: 10px; background: transparent; color: #ffc1c9; font-weight: 750; }
-.waiting-notice, .private-result { margin: 0; color: var(--muted); line-height: 1.5; }
+.waiting-notice, .private-result, .phase-instruction { margin: 0; color: var(--muted); line-height: 1.5; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
 .invite-card { padding: clamp(18px, 4vw, 28px); }
 .invite-card h2 { margin-bottom: 8px; }

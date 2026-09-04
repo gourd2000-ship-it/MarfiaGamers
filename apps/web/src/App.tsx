@@ -23,6 +23,7 @@ import { MafiaTeamNotice } from './features/game/mafia-team-notice.js';
 import { GamePlayerList } from './features/game/game-player-list.js';
 import { GameStatusBar } from './features/game/game-status-bar.js';
 import { PhaseWorkspace } from './features/game/phase-workspace.js';
+import { PhaseStatus } from './features/game/phase-status.js';
 
 export function App() {
   const socketUrl = import.meta.env.VITE_SOCKET_URL ?? window.location.origin;
@@ -42,6 +43,7 @@ export function App() {
   const [winner, setWinner] = useState<PublicGameState['winner'] | null>(null);
   const [eliminatedPlayerId, setEliminatedPlayerId] = useState<string | null>(null);
   const [voteTotals, setVoteTotals] = useState<Readonly<Record<string, number>> | null>(null);
+  const [isSkipping, setIsSkipping] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inviteRoomCode = roomCodeFromPath(window.location.pathname);
   const inviteTokenFromUrl = new URLSearchParams(window.location.search).get('token');
@@ -61,6 +63,7 @@ export function App() {
     setWinner(null);
     setEliminatedPlayerId(null);
     setVoteTotals(null);
+    setIsSkipping(false);
     setError(message);
     window.history.replaceState({}, '', '/');
   }
@@ -213,6 +216,23 @@ export function App() {
     ));
   }
 
+  function skipPhase(): Promise<boolean> {
+    if (!room || !socketRef.current?.connected || isSkipping) {
+      return Promise.resolve(false);
+    }
+
+    setIsSkipping(true);
+    return new Promise((resolve) => socketRef.current!.emit(
+      SOCKET_EVENTS.gameSkipPhase,
+      { roomId: room.code, expectedRevision: latestRevisionRef.current },
+      (response: GameCommandResponse) => {
+        setIsSkipping(false);
+        if (!response.ok) setError('시간을 넘길 수 없습니다. 방장 권한과 현재 게임 상태를 확인해 주세요.');
+        resolve(response.ok);
+      }
+    ));
+  }
+
   const eliminatedNickname = eliminatedPlayerId
     ? gamePlayers.find((player) => player.id === eliminatedPlayerId)?.nickname
     : null;
@@ -300,14 +320,14 @@ export function App() {
             <h1>마피아 게이머즈</h1>
           </div>
         </div>
-        {gamePhase ? <GameStatusBar endsAt={phaseEndsAt} phase={gamePhase} /> : null}
+        {gamePhase ? <GameStatusBar endsAt={phaseEndsAt} isSkipping={isSkipping} onSkip={isHost && gamePhase !== 'result' ? () => { void skipPhase(); } : undefined} phase={gamePhase} /> : null}
         <ConnectionStatus state={connectionState} />
       </header>
       <div className={room ? 'app-content has-room' : 'app-content'}>
         {room ? (
           <section className="room-board" aria-label={`${room.name} 게임 보드`}>
             <div className="room-summary">
-          <p>{room.name} 방이 만들어졌습니다. 친구가 2명 이상 모이면 게임을 시작할 수 있습니다.</p>
+              {gamePhase ? <PhaseStatus phase={gamePhase} /> : <p>{room.name} 방이 만들어졌습니다. 친구가 2명 이상 모이면 게임을 시작할 수 있습니다.</p>}
               <p>현재 입장 인원: <strong>{room.playerCount}명</strong></p>
             </div>
           {gamePhase ? (

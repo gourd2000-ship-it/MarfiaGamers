@@ -11,6 +11,7 @@ import {
   mafiaTargetSchema,
   policeInvestigateSchema,
   rematchRoomSchema,
+  skipPhaseSchema,
   startRoomSchema,
   type ClientToServerEvents,
   type PublicGameState,
@@ -69,30 +70,38 @@ export async function createRealtimeServer(
   const schedule = options.schedule ?? ((callback, delayMs) => { setTimeout(callback, delayMs); });
   const now = options.now ?? Date.now;
 
+  const advanceRoomPhase = (room: RoomSession, current: GameState, revision: number) => {
+    const next = shouldResolveNight(current)
+      ? resolveNight(current)
+      : current.phase === 'day-briefing'
+        ? beginDayVote(current)
+        : current.phase === 'day-vote' || current.phase === 'day-revote'
+          ? resolveDayVote(current)
+          : advanceGamePhase(current);
+    games.set(room.code, next);
+    const nextRevision = revision + 1;
+    revisions.set(room.code, nextRevision);
+    const nextPhaseEndsAt = next.phase === 'result' ? null : now() + room.timerSeconds * 1000;
+    phaseEndsAt.set(room.code, nextPhaseEndsAt);
+    io.to(room.code).emit(SOCKET_EVENTS.gamePublicState, toPublicGameState(room, next, nextRevision, nextPhaseEndsAt));
+
+    if (next.phase !== 'result') {
+      scheduleNextPhase(room, nextRevision);
+    }
+  };
+
   const scheduleNextPhase = (room: RoomSession, revision: number) => {
     schedule(() => {
+      if (revisions.get(room.code) !== revision) {
+        return;
+      }
+
       const current = games.get(room.code);
       if (!current) {
         return;
       }
 
-      const next = shouldResolveNight(current)
-        ? resolveNight(current)
-        : current.phase === 'day-briefing'
-          ? beginDayVote(current)
-          : current.phase === 'day-vote' || current.phase === 'day-revote'
-            ? resolveDayVote(current)
-            : advanceGamePhase(current);
-      games.set(room.code, next);
-      const nextRevision = (revisions.get(room.code) ?? revision) + 1;
-      revisions.set(room.code, nextRevision);
-      const nextPhaseEndsAt = next.phase === 'result' ? null : now() + room.timerSeconds * 1000;
-      phaseEndsAt.set(room.code, nextPhaseEndsAt);
-      io.to(room.code).emit(SOCKET_EVENTS.gamePublicState, toPublicGameState(room, next, nextRevision, nextPhaseEndsAt));
-
-      if (next.phase !== 'result') {
-        scheduleNextPhase(room, nextRevision);
-      }
+      advanceRoomPhase(room, current, revision);
     }, room.timerSeconds * 1000);
   };
 
@@ -208,6 +217,35 @@ export async function createRealtimeServer(
       } catch {
         respond({ ok: false, code: 'room-rejected' });
       }
+    });
+
+    socket.on(SOCKET_EVENTS.gameSkipPhase, (payload, acknowledge) => {
+      const respond = safelyAcknowledge(acknowledge);
+      const parsed = skipPhaseSchema.safeParse(payload);
+      if (!parsed.success) {
+        respond({ ok: false, code: 'invalid-payload' });
+        return;
+      }
+
+      const room = rooms.get(parsed.data.roomId);
+      const game = games.get(parsed.data.roomId);
+      const revision = revisions.get(parsed.data.roomId);
+      const requester = room?.players.find((player) => player.id === socket.id);
+      if (!room || !game || revision === undefined) {
+        respond({ ok: false, code: 'game-not-found' });
+        return;
+      }
+      if (!requester?.isHost || requester.status !== 'active' || game.phase === 'result') {
+        respond({ ok: false, code: 'command-rejected' });
+        return;
+      }
+      if (revision !== parsed.data.expectedRevision) {
+        respond({ ok: false, code: 'command-rejected' });
+        return;
+      }
+
+      advanceRoomPhase(room, game, revision);
+      respond({ ok: true });
     });
 
     socket.on(SOCKET_EVENTS.roomClose, (payload, acknowledge) => {

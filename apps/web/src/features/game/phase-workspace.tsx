@@ -43,8 +43,9 @@ export function PhaseWorkspace(props: PhaseWorkspaceProps) {
       {phase === 'night-police' && props.canAct && props.role === 'police' ? (
         <RoleActionPicker actionLabel="조사" description="조사할 한 명을 선택하세요. 결과는 나에게만 표시됩니다." heading="경찰 행동" onSelect={props.onPoliceInvestigate} players={props.players} />
       ) : null}
-      {(phase === 'day-vote' || phase === 'day-revote') && props.canAct ? <DayVotePicker onVote={props.onDayVote} players={props.players} /> : null}
+      {(phase === 'day-vote' || phase === 'day-revote') && props.canAct ? <DayVotePicker isRevote={phase === 'day-revote'} onVote={props.onDayVote} players={props.players} /> : null}
       {phase === 'day-briefing' && props.eliminatedNickname ? <EliminationNotice nickname={props.eliminatedNickname} /> : null}
+      {phase === 'day-briefing' ? <p className="phase-instruction">밤 결과를 확인하고 낮 투표를 준비하세요.</p> : null}
       {props.voteTotals && (phase === 'day-briefing' || phase === 'day-revote') ? <VoteResultNotice players={props.players} voteTotals={props.voteTotals} /> : null}
       {phase === 'result' && props.winner ? <GameResultPanel winner={props.winner} /> : null}
       {phase === 'result' && props.isHost ? <ResultControls onClose={props.onClose} onRematch={props.onRematch} /> : null}
@@ -61,5 +62,5 @@ function shouldWait({ phase, role, winner, canAct }: PhaseWorkspaceProps): boole
   if (phase === 'night-mafia') return role !== 'mafia';
   if (phase === 'night-doctor') return role !== 'doctor';
   if (phase === 'night-police') return role !== 'police';
-  return phase === 'day-briefing';
+  return false;
 }

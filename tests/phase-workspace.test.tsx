@@ -83,4 +83,17 @@ describe('PhaseWorkspace', () => {
     });
     expect(screen.getByText('최근 조사 결과: 선택한 참가자는 마피아입니다.')).toBeVisible();
   });
+
+  it('explains the next action while the daytime result is being announced', () => {
+    renderWorkspace({ phase: 'day-briefing' });
+
+    expect(screen.getByText('밤 결과를 확인하고 낮 투표를 준비하세요.')).toBeVisible();
+    expect(screen.queryByText('다른 참가자의 행동을 기다리고 있습니다.')).not.toBeInTheDocument();
+  });
+
+  it('explains that a tied daytime vote requires another choice', () => {
+    renderWorkspace({ phase: 'day-revote' });
+
+    expect(screen.getByText('동점입니다. 마피아를 다시 선택해주세요.')).toBeVisible();
+  });
 });

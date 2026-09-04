@@ -10,6 +10,7 @@ export const SOCKET_EVENTS = {
   gamePoliceInvestigate: 'game:police-investigate',
   gamePrivateInvestigation: 'game:private-investigation',
   gameDayVote: 'game:day-vote',
+  gameSkipPhase: 'game:skip-phase',
   roomCreate: 'room:create',
   roomJoin: 'room:join',
   roomClose: 'room:close',
@@ -57,6 +58,10 @@ export const policeInvestigateSchema = z.object({
 export const dayVoteSchema = z.object({
   roomId: z.string().trim().min(1).max(64).regex(/^[a-zA-Z0-9-]+$/),
   targetPlayerId: z.string().trim().min(1).max(128)
+});
+
+export const skipPhaseSchema = startRoomSchema.extend({
+  expectedRevision: z.number().int().min(1)
 });
 
 export type JoinRoomInput = z.infer<typeof joinRoomSchema>;
@@ -166,6 +171,10 @@ export interface ClientToServerEvents {
     acknowledge?: (response: GameCommandResponse) => void
   ) => void;
   'game:day-vote': (
+    payload: unknown,
+    acknowledge?: (response: GameCommandResponse) => void
+  ) => void;
+  'game:skip-phase': (
     payload: unknown,
     acknowledge?: (response: GameCommandResponse) => void
   ) => void;

@@ -26,7 +26,7 @@ export function MafiaTargetPicker({
 
   return (
     <section aria-labelledby="mafia-target-heading" className="action-picker">
-      <h2 id="mafia-target-heading">제거할 대상을 선택하세요</h2>
+      <h2 id="mafia-target-heading">마피아는 살해할 시민을 고르세요.</h2>
       <div className="selection-grid">
         {players.filter((player) => player.status === 'alive' && !excludedPlayerIds.includes(player.id)).map((player) => (
           <button aria-pressed={selectedPlayerId === player.id} className="player-choice" disabled={isSubmitting} key={player.id} onClick={() => void submitTarget(player.id)} type="button">

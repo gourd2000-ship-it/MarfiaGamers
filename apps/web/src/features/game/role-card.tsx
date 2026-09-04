@@ -17,6 +17,7 @@ export function RoleCard({ role }: PrivateRole) {
     <section aria-labelledby="role-card-heading" className={`role-card role-${role}`}>
       <p className="eyebrow">비공개 정보</p>
       <h2 id="role-card-heading">나의 역할</h2>
+      <p className="card-description">내 역할을 확인하고 다른 참가자에게 보여주지 마세요.</p>
       <button
         aria-expanded={isRevealed}
         className="role-card-toggle"

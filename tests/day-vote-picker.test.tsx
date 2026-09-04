@@ -32,4 +32,11 @@ describe('DayVotePicker', () => {
     expect(screen.getByRole('button', { name: '하늘에게 투표' })).toHaveAttribute('aria-pressed', 'false');
     expect(screen.queryByText('선택됨')).not.toBeInTheDocument();
   });
+
+  it('explains a revote after a tie', () => {
+    render(<DayVotePicker isRevote onVote={() => true} players={[{ id: 'p1', nickname: '하늘', status: 'alive', isHost: false }]} />);
+
+    expect(screen.getByRole('heading', { name: '비공개 재투표' })).toBeVisible();
+    expect(screen.getByText('동점입니다. 마피아를 다시 선택해주세요.')).toBeVisible();
+  });
 });

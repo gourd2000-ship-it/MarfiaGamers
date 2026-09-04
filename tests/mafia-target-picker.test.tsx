@@ -20,7 +20,7 @@ describe('MafiaTargetPicker', () => {
     expect(onSelect).toHaveBeenCalledWith('p3');
     expect(screen.queryByRole('button', { name: '하늘 선택' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '바다 선택' })).not.toBeInTheDocument();
-    expect(screen.getByRole('region', { name: '제거할 대상을 선택하세요' })).toHaveClass('action-picker');
+    expect(screen.getByRole('region', { name: '마피아는 살해할 시민을 고르세요.' })).toHaveClass('action-picker');
     expect(screen.getByRole('button', { name: '별 선택' })).toHaveClass('player-choice');
     await waitFor(() => expect(screen.getByRole('button', { name: '별 선택' })).toHaveAttribute('aria-pressed', 'true'));
     expect(screen.getByText('선택됨')).toBeVisible();

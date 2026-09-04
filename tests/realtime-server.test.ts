@@ -375,6 +375,36 @@ describe('createRealtimeServer', () => {
     players.forEach((client) => client.close());
   });
 
+  it('lets only the host skip a phase and ignores the superseded timer callback', async () => {
+    const scheduled: (() => void)[] = [];
+    const server = await createRealtimeServer({ schedule: (callback) => { scheduled.push(callback); } });
+    servers.push(server);
+    const clients = Array.from({ length: 4 }, () => createClient(server.url, { transports: ['websocket'], forceNew: true }));
+    const [host, ...players] = clients;
+    await Promise.all(clients.map(waitForConnect));
+    const created = await emitCreate(host, { name: '넘기기 방', maxPlayers: 4, timerSeconds: 60, nickname: '방장' });
+    if (!created.ok) throw new Error('Room creation unexpectedly failed.');
+    await Promise.all(players.map((client, index) => emitJoin(client, {
+      roomId: created.room.code, inviteToken: created.inviteToken, nickname: `학생${index + 1}`
+    })));
+
+    const reveal = onceGameState(host);
+    await emitStart(host, created.room.code);
+    const roleReveal = await reveal;
+    expect(roleReveal).toMatchObject({ phase: 'role-reveal', revision: 1 });
+    expect(await emitSkip(players[0], created.room.code, roleReveal.revision)).toEqual({ ok: false, code: 'command-rejected' });
+
+    const mafiaNight = onceGameState(host);
+    expect(await emitSkip(host, created.room.code, roleReveal.revision)).toEqual({ ok: true });
+    await expect(mafiaNight).resolves.toMatchObject({ phase: 'night-mafia' });
+    expect(await emitSkip(host, created.room.code, roleReveal.revision)).toEqual({ ok: false, code: 'command-rejected' });
+    expect(scheduled).toHaveLength(2);
+
+    scheduled[0]();
+    expect(scheduled).toHaveLength(2);
+    clients.forEach((client) => client.close());
+  });
+
   it('accepts doctor protection only from the doctor during doctor night', async () => {
     const scheduled: (() => void)[] = [];
     const server = await createRealtimeServer({ schedule: (callback) => { scheduled.push(callback); } });
@@ -609,6 +639,16 @@ function emitDayVote(
 ): Promise<GameCommandResponse> {
   return new Promise((resolve) => {
     client.emit(SOCKET_EVENTS.gameDayVote, { roomId, targetPlayerId }, resolve);
+  });
+}
+
+function emitSkip(
+  client: ReturnType<typeof createClient>,
+  roomId: string,
+  expectedRevision = 0
+): Promise<GameCommandResponse> {
+  return new Promise((resolve) => {
+    client.emit(SOCKET_EVENTS.gameSkipPhase, { roomId, expectedRevision }, resolve);
   });
 }
 

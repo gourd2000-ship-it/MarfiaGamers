@@ -74,7 +74,7 @@ test('four browsers receive private roles and complete an automatic round throug
     }
 
     await Promise.all(allPlayers.map(({ page: playerPage }) =>
-      expect(playerPage.getByText('낮: 투표하는 시간')).toBeVisible({ timeout: 40_000 })
+      expect(playerPage.getByLabel('현재 게임 상태').getByText('마피아를 선택해주세요.')).toBeVisible({ timeout: 40_000 })
     ));
     await Promise.all(allPlayers.map(({ page: playerPage }) =>
       playerPage.getByRole('button', { name: `${mafia.nickname}에게 투표` }).click()
@@ -84,7 +84,7 @@ test('four browsers receive private roles and complete an automatic round throug
     ));
 
     await page.getByRole('button', { name: '재경기 시작' }).click();
-    await expect(page.getByText('역할을 확인하는 시간')).toBeVisible();
+    await expect(page.getByLabel('현재 게임 상태').getByText('역할을 확인하는 시간')).toBeVisible();
     await Promise.all(allPlayers.map(async ({ page: playerPage }) => {
       await playerPage.getByRole('button', { name: '내 역할 확인' }).click();
       await expect(playerPage.getByText(/^나의 역할:/)).toBeVisible();

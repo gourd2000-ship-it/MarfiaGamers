@@ -11,6 +11,7 @@ describe('RoleCard', () => {
     render(<RoleCard role="doctor" />);
 
     expect(screen.getByRole('button', { name: '내 역할 확인' })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByText('내 역할을 확인하고 다른 참가자에게 보여주지 마세요.')).toBeVisible();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '내 역할 확인' }));
     expect(screen.getByRole('status')).toHaveTextContent('나의 역할: 의사');
