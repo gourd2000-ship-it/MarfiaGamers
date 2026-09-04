@@ -19,6 +19,7 @@ import { ConnectionStatus, type ConnectionState } from './components/connection-
 import { CreateRoomForm, type CreateRoomValues } from './features/lobby/create-room-form.js';
 import { InviteCard } from './features/lobby/invite-card.js';
 import { JoinRoomForm, type JoinRoomValues } from './features/lobby/join-room-form.js';
+import { LobbyParticipantList } from './features/lobby/lobby-participant-list.js';
 import { MafiaTeamNotice } from './features/game/mafia-team-notice.js';
 import { GamePlayerList } from './features/game/game-player-list.js';
 import { GameStatusBar } from './features/game/game-status-bar.js';
@@ -32,6 +33,7 @@ export function App() {
   const hadRoomRef = useRef(false);
   const [connectionState, setConnectionState] = useState<ConnectionState>('connecting');
   const [room, setRoom] = useState<RoomSummary | null>(null);
+  const [lobbyPlayers, setLobbyPlayers] = useState<PublicRoomState['players']>([]);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [isHost, setIsHost] = useState(false);
   const [privateRole, setPrivateRole] = useState<PrivateRole['role'] | null>(null);
@@ -52,6 +54,7 @@ export function App() {
     hadRoomRef.current = false;
     latestRevisionRef.current = 0;
     setRoom(null);
+    setLobbyPlayers([]);
     setInviteToken(null);
     setIsHost(false);
     setPrivateRole(null);
@@ -87,6 +90,7 @@ export function App() {
 
       hadRoomRef.current = true;
       setRoom(nextRoom);
+      setLobbyPlayers(nextRoom.players);
       setIsHost(nextRoom.players.some((player) =>
         player.id === socket.id && player.status === 'active' && player.isHost
       ));
@@ -160,6 +164,7 @@ export function App() {
       }
 
       setRoom(response.room);
+      setLobbyPlayers([{ id: socketRef.current?.id ?? 'local-host', nickname: values.nickname.trim(), status: 'active', isHost: true }]);
       setInviteToken(response.inviteToken);
       setIsHost(true);
       hadRoomRef.current = true;
@@ -360,14 +365,17 @@ export function App() {
           ) : (
             <div className="lobby-board-layout">
               {inviteToken ? <InviteCard inviteToken={inviteToken} origin={window.location.origin} roomCode={room.code} /> : null}
-              {isHost && room.status === 'lobby' ? (
-                <div className="start-game-control">
-                  <button className="button-primary" disabled={room.playerCount < 2} onClick={startRoom} type="button">
-                    게임 시작
-                  </button>
-                  {room.playerCount < 2 ? <p>게임을 시작하려면 2명 이상이 필요합니다.</p> : null}
+              <div className="lobby-side-panel">
+                {lobbyPlayers.length > 0 ? <LobbyParticipantList players={lobbyPlayers} /> : null}
+                {isHost && room.status === 'lobby' ? (
+                  <div className="start-game-control">
+                    <button className="button-primary" disabled={room.playerCount < 2} onClick={startRoom} type="button">
+                      게임 시작
+                    </button>
+                    {room.playerCount < 2 ? <p>게임을 시작하려면 2명 이상이 필요합니다.</p> : null}
+                  </div>
+                ) : null}
                 </div>
-              ) : null}
             </div>
           )}
           </section>

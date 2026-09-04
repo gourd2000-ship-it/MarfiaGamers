@@ -236,7 +236,7 @@ export function resolveDayVote(game: GameState): GameState {
   }
 
   const winner = getWinner(resolved);
-  if (winner) {
+  if (winner && !shouldDeferThreePlayerMafiaWin(game, winner)) {
     return { ...resolved, phase: 'result', winner };
   }
 
@@ -262,6 +262,13 @@ export function getWinner(game: GameState): 'mafia' | 'citizens' | null {
     return 'citizens';
   }
   return mafiaCount >= citizenCount ? 'mafia' : null;
+}
+
+function shouldDeferThreePlayerMafiaWin(
+  game: GameState,
+  winner: 'mafia' | 'citizens' | null
+): boolean {
+  return winner === 'mafia' && game.preset?.playerCount === 3 && game.nightResult === undefined;
 }
 
 export function startGame(

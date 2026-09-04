@@ -46,7 +46,7 @@ export function nextGamePhase(
   preset: RolePreset
 ): GamePhase {
   if (currentPhase === 'role-reveal') {
-    return 'night-mafia';
+    return preset.playerCount === 3 ? 'day-briefing' : 'night-mafia';
   }
 
   if (currentPhase === 'night-mafia') {

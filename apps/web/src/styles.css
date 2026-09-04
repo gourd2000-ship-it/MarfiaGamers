@@ -68,6 +68,7 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 .room-board { display: grid; gap: 18px; width: 100%; max-width: none; padding: clamp(18px, 4vw, 32px); }
 .room-summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 20px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
 .lobby-board-layout { display: grid; gap: 18px; }
+.lobby-side-panel { display: grid; gap: 18px; align-content: start; }
 .game-board-layout { display: grid; gap: 18px; }
 .game-board-layout.is-role-reveal { grid-template-columns: minmax(0, 620px); justify-content: center; }
 .game-board-layout.is-role-reveal .role-card { min-height: min(60vh, 520px); align-content: center; }

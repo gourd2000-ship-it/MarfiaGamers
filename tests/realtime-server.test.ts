@@ -375,6 +375,29 @@ describe('createRealtimeServer', () => {
     players.forEach((client) => client.close());
   });
 
+  it('starts a three-player game with a daytime briefing before the first mafia night', async () => {
+    const scheduled: (() => void)[] = [];
+    const server = await createRealtimeServer({ schedule: (callback) => { scheduled.push(callback); } });
+    servers.push(server);
+    const clients = Array.from({ length: 3 }, () => createClient(server.url, { transports: ['websocket'], forceNew: true }));
+    const [host, ...players] = clients;
+    await Promise.all(clients.map(waitForConnect));
+    const created = await emitCreate(host, { name: 'Three player room', maxPlayers: 3, timerSeconds: 60, nickname: 'Host' });
+    if (!created.ok) throw new Error('Room creation unexpectedly failed.');
+    await Promise.all(players.map((client, index) => emitJoin(client, {
+      roomId: created.room.code, inviteToken: created.inviteToken, nickname: `Player${index + 1}`
+    })));
+
+    const reveal = onceGameState(host);
+    await emitStart(host, created.room.code);
+    await expect(reveal).resolves.toMatchObject({ phase: 'role-reveal' });
+    const firstDay = onceGameState(host);
+    scheduled.shift()?.();
+
+    await expect(firstDay).resolves.toMatchObject({ phase: 'day-briefing' });
+    clients.forEach((client) => client.close());
+  });
+
   it('lets only the host skip a phase and ignores the superseded timer callback', async () => {
     const scheduled: (() => void)[] = [];
     const server = await createRealtimeServer({ schedule: (callback) => { scheduled.push(callback); } });

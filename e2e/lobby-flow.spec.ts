@@ -30,6 +30,12 @@ test('a student can create a QR room and another browser can join from its invit
 
   await expect(guestPage.getByText('현재 입장 인원: 2명')).toBeVisible();
   await expect(page.getByText('현재 입장 인원: 2명')).toBeVisible();
+  for (const lobbyPage of [page, guestPage]) {
+    await expect(lobbyPage.getByRole('heading', { name: '로비 참가자' })).toBeVisible();
+    await expect(lobbyPage.getByRole('listitem', { name: '방장 · 방장' })).toBeVisible();
+    await expect(lobbyPage.getByRole('listitem', { name: '하늘' })).toBeVisible();
+  }
+
   await guestContext.close();
 });
 

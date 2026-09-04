@@ -21,6 +21,12 @@ const fourPlayers = [
   { id: 'p4', name: '숲' }
 ];
 
+const threePlayers = [
+  { id: 'p1', name: 'Three one' },
+  { id: 'p2', name: 'Three two' },
+  { id: 'p3', name: 'Three three' }
+];
+
 describe('automatic game setup', () => {
   it('automatically assigns the four-player preset without accepting host-selected roles', () => {
     const lobby = createGame({ roomId: 'room-1', players: fourPlayers });
@@ -41,6 +47,30 @@ describe('automatic game setup', () => {
 
     expect(night.phase).toBe('night-mafia');
     expect(dayBriefing.phase).toBe('day-briefing');
+  });
+
+  it('gives a three-player game one daytime vote before its first mafia night', () => {
+    const started = startGame(createGame({ roomId: 'room-1', players: threePlayers }), () => 0);
+    const mafiaId = Object.entries(started.roleAssignments).find(([, role]) => role === 'mafia')?.[0];
+    const citizenIds = Object.entries(started.roleAssignments)
+      .filter(([, role]) => role === 'citizen')
+      .map(([playerId]) => playerId);
+    if (!mafiaId || citizenIds.length !== 2) {
+      throw new Error('The three-player preset must include one mafia and two citizens.');
+    }
+
+    const firstDay = advanceGamePhase(started);
+    const firstDayVote = beginDayVote(firstDay);
+    const afterFirstDay = threePlayers.reduce(
+      (game, player) => submitDayVote(game, player.id, citizenIds[0]),
+      firstDayVote
+    );
+    const firstNight = resolveDayVote(afterFirstDay);
+    const finalNight = resolveNight(submitMafiaVote(firstNight, mafiaId, citizenIds[1]));
+
+    expect(firstDay.phase).toBe('day-briefing');
+    expect(firstNight).toMatchObject({ phase: 'night-mafia', winner: undefined });
+    expect(finalNight).toMatchObject({ phase: 'result', winner: 'mafia' });
   });
 });
 
