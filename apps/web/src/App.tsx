@@ -19,18 +19,10 @@ import { ConnectionStatus, type ConnectionState } from './components/connection-
 import { CreateRoomForm, type CreateRoomValues } from './features/lobby/create-room-form.js';
 import { InviteCard } from './features/lobby/invite-card.js';
 import { JoinRoomForm, type JoinRoomValues } from './features/lobby/join-room-form.js';
-import { RoleCard } from './features/game/role-card.js';
-import { PhaseStatus } from './features/game/phase-status.js';
-import { MafiaTargetPicker } from './features/game/mafia-target-picker.js';
-import { DayVotePicker } from './features/game/day-vote-picker.js';
-import { RoleActionPicker } from './features/game/role-action-picker.js';
-import { GameResultPanel } from './features/game/game-result-panel.js';
-import { EliminationNotice } from './features/game/elimination-notice.js';
-import { ResultControls } from './features/game/result-controls.js';
-import { PhaseCountdown } from './features/game/phase-countdown.js';
 import { MafiaTeamNotice } from './features/game/mafia-team-notice.js';
 import { GamePlayerList } from './features/game/game-player-list.js';
-import { VoteResultNotice } from './features/game/vote-result-notice.js';
+import { GameStatusBar } from './features/game/game-status-bar.js';
+import { PhaseWorkspace } from './features/game/phase-workspace.js';
 
 export function App() {
   const socketUrl = import.meta.env.VITE_SOCKET_URL ?? window.location.origin;
@@ -206,72 +198,68 @@ export function App() {
     });
   }
 
-  function submitMafiaTarget(targetPlayerId: string) {
+  function submitMafiaTarget(targetPlayerId: string): Promise<boolean> {
     if (!room || !socketRef.current?.connected) {
-      return;
+      return Promise.resolve(false);
     }
 
-    socketRef.current.emit(
+    return new Promise((resolve) => socketRef.current!.emit(
       SOCKET_EVENTS.gameMafiaTarget,
       { roomId: room.code, targetPlayerId },
       (response: GameCommandResponse) => {
-        if (!response.ok) {
-          setError('대상을 선택할 수 없습니다. 현재 단계와 권한을 확인해 주세요.');
-        }
+        if (!response.ok) setError('대상을 선택할 수 없습니다. 현재 단계와 권한을 확인해 주세요.');
+        resolve(response.ok);
       }
-    );
+    ));
   }
 
   const eliminatedNickname = eliminatedPlayerId
     ? gamePlayers.find((player) => player.id === eliminatedPlayerId)?.nickname
     : null;
 
-  function submitDayVote(targetPlayerId: string) {
+  function submitDayVote(targetPlayerId: string): Promise<boolean> {
     if (!room || !socketRef.current?.connected) {
-      return;
+      return Promise.resolve(false);
     }
 
-    socketRef.current.emit(
+    return new Promise((resolve) => socketRef.current!.emit(
       SOCKET_EVENTS.gameDayVote,
       { roomId: room.code, targetPlayerId },
       (response: GameCommandResponse) => {
-        if (!response.ok) {
-          setError('투표를 제출할 수 없습니다. 이미 투표했거나 현재 단계가 아닐 수 있습니다.');
-        }
+        if (!response.ok) setError('투표를 제출할 수 없습니다. 이미 투표했거나 현재 단계가 아닐 수 있습니다.');
+        resolve(response.ok);
       }
-    );
+    ));
   }
 
-  function submitDoctorProtection(targetPlayerId: string) {
+  function submitDoctorProtection(targetPlayerId: string): Promise<boolean> {
     if (!room || !socketRef.current?.connected) {
-      return;
+      return Promise.resolve(false);
     }
 
-    socketRef.current.emit(
+    return new Promise((resolve) => socketRef.current!.emit(
       SOCKET_EVENTS.gameDoctorProtect,
       { roomId: room.code, targetPlayerId },
       (response: GameCommandResponse) => {
-        if (!response.ok) {
-          setError('보호 대상을 선택할 수 없습니다. 현재 단계와 권한을 확인해 주세요.');
-        }
+        if (!response.ok) setError('보호 대상을 선택할 수 없습니다. 현재 단계와 권한을 확인해 주세요.');
+        resolve(response.ok);
       }
-    );
+    ));
   }
 
-  function submitPoliceInvestigation(targetPlayerId: string) {
+  function submitPoliceInvestigation(targetPlayerId: string): Promise<boolean> {
     if (!room || !socketRef.current?.connected) {
-      return;
+      return Promise.resolve(false);
     }
 
-    socketRef.current.emit(
+    return new Promise((resolve) => socketRef.current!.emit(
       SOCKET_EVENTS.gamePoliceInvestigate,
       { roomId: room.code, targetPlayerId },
       (response: GameCommandResponse) => {
-        if (!response.ok) {
-          setError('조사 대상을 선택할 수 없습니다. 현재 단계와 권한을 확인해 주세요.');
-        }
+        if (!response.ok) setError('조사 대상을 선택할 수 없습니다. 현재 단계와 권한을 확인해 주세요.');
+        resolve(response.ok);
       }
-    );
+    ));
   }
 
   function rematch() {
@@ -303,62 +291,73 @@ export function App() {
   }
 
   return (
-    <main>
-      <h1>마피아 게이머즈</h1>
-      <ConnectionStatus state={connectionState} />
-      {room ? (
-        <>
+    <main className="app-shell">
+      <header className="app-header">
+        <div className="brand">
+          <span aria-hidden="true" className="brand-mark">◐</span>
+          <div>
+            <p className="eyebrow">실시간 추리 게임</p>
+            <h1>마피아 게이머즈</h1>
+          </div>
+        </div>
+        {gamePhase ? <GameStatusBar endsAt={phaseEndsAt} phase={gamePhase} /> : null}
+        <ConnectionStatus state={connectionState} />
+      </header>
+      <div className={room ? 'app-content has-room' : 'app-content'}>
+        {room ? (
+          <section className="room-board" aria-label={`${room.name} 게임 보드`}>
+            <div className="room-summary">
           <p>{room.name} 방이 만들어졌습니다. 친구가 2명 이상 모이면 게임을 시작할 수 있습니다.</p>
-          <p>현재 입장 인원: {room.playerCount}명</p>
-          {privateRole ? <RoleCard role={privateRole} /> : null}
-          {gamePhase ? <PhaseStatus phase={gamePhase} /> : null}
-          <PhaseCountdown endsAt={phaseEndsAt} />
-          {gamePlayers.length > 0 ? <GamePlayerList players={gamePlayers} /> : null}
-          {winner ? <GameResultPanel winner={winner} /> : null}
-          {isHost && gamePhase === 'result' ? <ResultControls onClose={closeRoom} onRematch={rematch} /> : null}
-          {eliminatedNickname ? <EliminationNotice nickname={eliminatedNickname} /> : null}
-          {voteTotals ? <VoteResultNotice players={gamePlayers} voteTotals={voteTotals} /> : null}
-          {privateRole === 'mafia' ? <MafiaTeamNotice mafiaPlayerIds={mafiaPlayerIds} players={gamePlayers} /> : null}
-          {privateRole === 'mafia' && gamePhase === 'night-mafia' ? (
-            <MafiaTargetPicker excludedPlayerIds={mafiaPlayerIds} onSelect={submitMafiaTarget} players={gamePlayers} />
-          ) : null}
-          {privateRole === 'doctor' && gamePhase === 'night-doctor' ? (
-            <RoleActionPicker
-              actionLabel="보호"
-              description="보호할 한 명을 선택하세요. 자기 보호는 전체 게임에서 한 번만 가능합니다."
-              heading="의사 행동"
-              onSelect={submitDoctorProtection}
-              players={gamePlayers}
-            />
-          ) : null}
-          {privateRole === 'police' && gamePhase === 'night-police' ? (
-            <RoleActionPicker
-              actionLabel="조사"
-              description="조사할 한 명을 선택하세요. 결과는 나에게만 표시됩니다."
-              heading="경찰 행동"
-              onSelect={submitPoliceInvestigation}
-              players={gamePlayers}
-            />
-          ) : null}
-          {gamePhase === 'day-vote' || gamePhase === 'day-revote' ? (
-            <DayVotePicker onVote={submitDayVote} players={gamePlayers} />
-          ) : null}
-          {policeResult ? (
-            <p role="status">최근 조사 결과: 선택한 참가자는 {policeResult.alignment === 'mafia' ? '마피아' : '시민'}입니다.</p>
-          ) : null}
-          {inviteToken ? <InviteCard inviteToken={inviteToken} origin={window.location.origin} roomCode={room.code} /> : null}
-          {isHost && room.status === 'lobby' ? (
-            <button disabled={room.playerCount < 2} onClick={startRoom} type="button">
-              게임 시작
-            </button>
-          ) : null}
-        </>
+              <p>현재 입장 인원: <strong>{room.playerCount}명</strong></p>
+            </div>
+          {gamePhase ? (
+            <div className={`game-board-layout ${gamePhase === 'role-reveal' ? 'is-role-reveal' : ''}`}>
+              {gamePhase !== 'role-reveal' ? <aside className="game-players-panel">{gamePlayers.length > 0 ? <GamePlayerList players={gamePlayers} /> : null}</aside> : null}
+              <PhaseWorkspace
+                eliminatedNickname={eliminatedNickname ?? null}
+                canAct={gamePlayers.some((player) => player.id === socketRef.current?.id && player.status === 'alive')}
+                isHost={isHost}
+                mafiaPlayerIds={mafiaPlayerIds}
+                onClose={closeRoom}
+                onDayVote={submitDayVote}
+                onDoctorProtect={submitDoctorProtection}
+                onMafiaTarget={submitMafiaTarget}
+                onPoliceInvestigate={submitPoliceInvestigation}
+                onRematch={rematch}
+                phase={gamePhase}
+                players={gamePlayers}
+                policeResult={policeResult}
+                role={privateRole}
+                voteTotals={voteTotals}
+                winner={winner ?? null}
+              />
+              {gamePhase !== 'role-reveal' ? (
+                <aside className="game-support-panel">
+                  {privateRole === 'mafia' && gamePhase === 'night-mafia' ? <MafiaTeamNotice mafiaPlayerIds={mafiaPlayerIds} players={gamePlayers} /> : null}
+                </aside>
+              ) : null}
+            </div>
+          ) : (
+            <div className="lobby-board-layout">
+              {inviteToken ? <InviteCard inviteToken={inviteToken} origin={window.location.origin} roomCode={room.code} /> : null}
+              {isHost && room.status === 'lobby' ? (
+                <div className="start-game-control">
+                  <button className="button-primary" disabled={room.playerCount < 2} onClick={startRoom} type="button">
+                    게임 시작
+                  </button>
+                  {room.playerCount < 2 ? <p>게임을 시작하려면 2명 이상이 필요합니다.</p> : null}
+                </div>
+              ) : null}
+            </div>
+          )}
+          </section>
       ) : inviteRoomCode && inviteTokenFromUrl ? (
         <JoinRoomForm inviteToken={inviteTokenFromUrl} onJoin={joinRoom} roomCode={inviteRoomCode} />
       ) : (
         <CreateRoomForm onCreate={createRoom} />
       )}
-      {error ? <p role="alert">{error}</p> : null}
+        {error ? <p className="error-message" role="alert">{error}</p> : null}
+      </div>
     </main>
   );
 }

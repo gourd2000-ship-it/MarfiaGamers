@@ -19,7 +19,7 @@ export function PhaseCountdown({ endsAt }: { endsAt: string | null }) {
     return null;
   }
 
-  return <p aria-live="polite" role="timer">남은 시간: {remainingSeconds}초</p>;
+  return <p aria-live="polite" className="phase-countdown" role="timer">남은 시간: {remainingSeconds}초</p>;
 }
 
 function getRemainingSeconds(endsAt: string | null): number {

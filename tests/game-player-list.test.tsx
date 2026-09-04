@@ -15,9 +15,11 @@ describe('GamePlayerList', () => {
     ]} />);
 
     expect(screen.getByRole('heading', { name: '참가자 현황' })).toBeInTheDocument();
-    expect(screen.getByText('하늘 · 생존 · 방장')).toBeInTheDocument();
-    expect(screen.getByText('바다 · 탈락')).toBeInTheDocument();
-    expect(screen.getByText('별 · 자동 기권')).toBeInTheDocument();
+    expect(screen.getByRole('listitem', { name: '하늘 · 생존 · 방장' })).toBeInTheDocument();
+    expect(screen.getByRole('listitem', { name: '바다 · 탈락' })).toBeInTheDocument();
+    expect(screen.getByRole('listitem', { name: '별 · 자동 기권' })).toBeInTheDocument();
     expect(screen.queryByText('마피아')).not.toBeInTheDocument();
+    expect(screen.getByRole('list')).toHaveClass('player-grid');
+    expect(screen.getByText('생존')).toHaveClass('status-badge', 'is-alive');
   });
 });

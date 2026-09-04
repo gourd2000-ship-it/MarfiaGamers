@@ -17,5 +17,6 @@ describe('ResultControls', () => {
 
     expect(onRematch).toHaveBeenCalledOnce();
     expect(onClose).toHaveBeenCalledOnce();
+    expect(screen.getByRole('region', { name: '결과 관리' })).toHaveClass('result-controls');
   });
 });

@@ -11,5 +11,6 @@ describe('GameResultPanel', () => {
     render(<GameResultPanel winner="citizens" />);
 
     expect(screen.getByRole('status')).toHaveTextContent('시민 팀 승리');
+    expect(screen.getByRole('region', { name: '게임 결과' })).toHaveClass('game-result-panel', 'winner-citizens');
   });
 });

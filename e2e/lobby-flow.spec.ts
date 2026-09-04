@@ -1,5 +1,16 @@
 import { expect, test } from 'playwright/test';
 
+test('the lobby fits compact mobile and tablet screens without horizontal scrolling', async ({ page }) => {
+  for (const viewport of [{ width: 320, height: 700 }, { width: 390, height: 844 }, { width: 768, height: 900 }]) {
+    await page.setViewportSize(viewport);
+    await page.goto('/');
+    await expect(page.getByRole('status')).toHaveText('실시간 서버에 연결됨');
+
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    expect(await page.getByRole('button', { name: '방 만들기' }).evaluate((button) => button.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
+  }
+});
+
 test('a student can create a QR room and another browser can join from its invite URL', async ({ browser, page }) => {
   await page.goto('/');
   await expect(page.getByRole('status')).toHaveText('실시간 서버에 연결됨');
@@ -47,9 +58,10 @@ test('four browsers receive private roles and complete an automatic round throug
     await page.getByRole('button', { name: '게임 시작' }).click();
 
     await expect(page.getByRole('timer')).toHaveText(/남은 시간: \d+초/);
-    await Promise.all(allPlayers.map(({ page: playerPage }) =>
-      expect(playerPage.getByText(/^나의 역할:/)).toBeVisible()
-    ));
+    await Promise.all(allPlayers.map(async ({ page: playerPage }) => {
+      await playerPage.getByRole('button', { name: '내 역할 확인' }).click();
+      await expect(playerPage.getByText(/^나의 역할:/)).toBeVisible();
+    }));
     let mafia: (typeof allPlayers)[number] | undefined;
     for (const candidate of allPlayers) {
       if (await candidate.page.getByText('나의 역할: 마피아').isVisible()) {
@@ -73,9 +85,10 @@ test('four browsers receive private roles and complete an automatic round throug
 
     await page.getByRole('button', { name: '재경기 시작' }).click();
     await expect(page.getByText('역할을 확인하는 시간')).toBeVisible();
-    await Promise.all(allPlayers.map(({ page: playerPage }) =>
-      expect(playerPage.getByText(/^나의 역할:/)).toBeVisible()
-    ));
+    await Promise.all(allPlayers.map(async ({ page: playerPage }) => {
+      await playerPage.getByRole('button', { name: '내 역할 확인' }).click();
+      await expect(playerPage.getByText(/^나의 역할:/)).toBeVisible();
+    }));
   } finally {
     await Promise.all(guestContexts.map(({ context }) => context.close()));
   }

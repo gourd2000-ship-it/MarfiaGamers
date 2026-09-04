@@ -12,5 +12,6 @@ describe('EliminationNotice', () => {
 
     expect(screen.getByRole('status')).toHaveTextContent('하늘님이 탈락했습니다.');
     expect(screen.getByRole('status')).not.toHaveTextContent('마피아');
+    expect(screen.getByRole('status')).toHaveClass('elimination-notice');
   });
 });

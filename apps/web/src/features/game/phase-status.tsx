@@ -12,5 +12,5 @@ const labels: Record<GamePhase, string> = {
 };
 
 export function PhaseStatus({ phase }: { phase: GamePhase }) {
-  return <p role="status">{labels[phase]}</p>;
+  return <p className="phase-status" role="status">{labels[phase]}</p>;
 }

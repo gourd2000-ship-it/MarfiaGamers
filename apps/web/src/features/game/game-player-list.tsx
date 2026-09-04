@@ -8,11 +8,15 @@ const statusLabels: Record<PublicGamePlayer['status'], string> = {
 
 export function GamePlayerList({ players }: { players: readonly PublicGamePlayer[] }) {
   return (
-    <section aria-labelledby="game-player-list-heading">
+    <section aria-labelledby="game-player-list-heading" className="player-list-card">
       <h2 id="game-player-list-heading">참가자 현황</h2>
-      <ul>
+      <ul className="player-grid">
         {players.map((player) => (
-          <li key={player.id}>{player.nickname} · {statusLabels[player.status]}{player.isHost ? ' · 방장' : ''}</li>
+          <li aria-label={`${player.nickname} · ${statusLabels[player.status]}${player.isHost ? ' · 방장' : ''}`} className="player-card" key={player.id}>
+            <span className="player-name">{player.nickname}</span>
+            <span className={`status-badge is-${player.status}`}>{statusLabels[player.status]}</span>
+            {player.isHost ? <span className="host-badge">방장</span> : null}
+          </li>
         ))}
       </ul>
     </section>

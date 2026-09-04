@@ -12,5 +12,5 @@ const labels: Record<ConnectionState, string> = {
 };
 
 export function ConnectionStatus({ state }: { state: ConnectionState }) {
-  return <p role="status">{labels[state]}</p>;
+  return <p className={`connection-status is-${state}`} role="status">{labels[state]}</p>;
 }

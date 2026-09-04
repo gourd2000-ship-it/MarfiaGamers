@@ -11,7 +11,7 @@ export function VoteResultNotice({
   const entries = Object.entries(voteTotals);
 
   return (
-    <section aria-labelledby="vote-result-heading">
+    <section aria-labelledby="vote-result-heading" className="vote-result-notice">
       <h2 id="vote-result-heading">투표 결과</h2>
       {entries.length === 0 ? (
         <p>득표가 없습니다.</p>
