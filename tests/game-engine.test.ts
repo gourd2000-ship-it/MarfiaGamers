@@ -34,18 +34,21 @@ describe('automatic game setup', () => {
     const started = startGame(lobby, () => 0);
 
     expect(started.phase).toBe('role-reveal');
-    expect(started.preset).toMatchObject({ mafia: 1, doctor: 0, police: 0, citizen: 3 });
+    expect(started.preset).toMatchObject({ mafia: 1, doctor: 1, police: 0, citizen: 2 });
     expect(Object.values(started.roleAssignments).filter((role) => role === 'mafia')).toHaveLength(1);
-    expect(Object.values(started.roleAssignments).filter((role) => role === 'citizen')).toHaveLength(3);
+    expect(Object.values(started.roleAssignments).filter((role) => role === 'doctor')).toHaveLength(1);
+    expect(Object.values(started.roleAssignments).filter((role) => role === 'citizen')).toHaveLength(2);
   });
 
-  it('moves a four-player game from the mafia night directly to the day briefing', () => {
+  it('moves a four-player game from the mafia night through the doctor phase to the day briefing', () => {
     const started = startGame(createGame({ roomId: 'room-1', players: fourPlayers }), () => 0);
 
     const night = advanceGamePhase(started);
-    const dayBriefing = advanceGamePhase(night);
+    const doctorNight = advanceGamePhase(night);
+    const dayBriefing = advanceGamePhase(doctorNight);
 
     expect(night.phase).toBe('night-mafia');
+    expect(doctorNight.phase).toBe('night-doctor');
     expect(dayBriefing.phase).toBe('day-briefing');
   });
 
@@ -119,7 +122,7 @@ describe('police investigation', () => {
       throw new Error('The five-player preset must include police and mafia.');
     }
 
-    const policePhase = advanceGamePhase(advanceGamePhase(started));
+    const policePhase = advanceGamePhase(advanceGamePhase(advanceGamePhase(started)));
     const investigated = submitPoliceInvestigation(policePhase, policeId, mafiaId);
 
     expect(investigated.policeResult).toEqual({ targetId: mafiaId, alignment: 'mafia' });
@@ -168,8 +171,8 @@ describe('night resolution', () => {
     const citizenIds = Object.entries(started.roleAssignments)
       .filter(([, role]) => role === 'citizen')
       .map(([playerId]) => playerId);
-    if (!mafiaId || citizenIds.length !== 3) {
-      throw new Error('The four-player preset must include one mafia and three citizens.');
+    if (!mafiaId || citizenIds.length !== 2) {
+      throw new Error('The four-player preset must include one mafia and two citizens.');
     }
 
     const nearParityNight = {

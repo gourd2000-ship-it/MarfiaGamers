@@ -69,18 +69,28 @@ test('four browsers receive private roles and complete an automatic round throug
       await expect(playerPage.getByText(/^나의 역할:/)).toBeVisible();
     }));
     let mafia: (typeof allPlayers)[number] | undefined;
+    let doctor: (typeof allPlayers)[number] | undefined;
     for (const candidate of allPlayers) {
       if (await candidate.page.getByText('나의 역할: 마피아').isVisible()) {
         mafia = candidate;
-        break;
+      }
+      if (await candidate.page.getByText('나의 역할: 의사').isVisible()) {
+        doctor = candidate;
       }
     }
-    if (!mafia) {
-      throw new Error('The four-player preset must assign one mafia browser.');
+    const citizen = allPlayers.find((candidate) => candidate !== mafia && candidate !== doctor);
+    if (!mafia || !doctor || !citizen) {
+      throw new Error('The four-player preset must assign mafia, doctor, and citizens.');
     }
 
+    await expect(mafia.page.getByRole('button', { name: `${citizen.nickname} 선택` })).toBeVisible({ timeout: 20_000 });
+    await mafia.page.getByRole('button', { name: `${citizen.nickname} 선택` }).click();
+    await mafia.page.getByRole('button', { name: '선택 완료' }).click();
+    await expect(doctor.page.getByRole('button', { name: `${citizen.nickname} 보호` })).toBeVisible({ timeout: 15_000 });
+    await doctor.page.getByRole('button', { name: `${citizen.nickname} 보호` }).click();
+    await doctor.page.getByRole('button', { name: '선택 완료' }).click();
     await Promise.all(allPlayers.map(({ page: playerPage }) =>
-      expect(playerPage.getByLabel('현재 게임 상태').getByText('마피아를 선택해주세요.')).toBeVisible({ timeout: 40_000 })
+      expect(playerPage.getByLabel('현재 게임 상태').getByText('마피아를 선택해주세요.')).toBeVisible({ timeout: 20_000 })
     ));
     await Promise.all(allPlayers.map(({ page: playerPage }) =>
       playerPage.getByRole('button', { name: `${mafia.nickname}에게 투표` }).click()

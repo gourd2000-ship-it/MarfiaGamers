@@ -29,7 +29,7 @@ export function createRolePreset(playerCount: number): RolePreset {
     playerCount <= 9 ? 2 :
     playerCount <= 13 ? 3 :
     playerCount <= 17 ? 4 : 5;
-  const doctor = playerCount >= 6 ? 1 : 0;
+  const doctor = playerCount >= 4 ? 1 : 0;
   const police = playerCount >= 5 ? 1 : 0;
 
   return {

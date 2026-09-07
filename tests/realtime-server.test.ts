@@ -263,6 +263,53 @@ describe('createRealtimeServer', () => {
     player.close();
   });
 
+  it('automatically advances after each required action in a four-player game', async () => {
+    const scheduled: (() => void)[] = [];
+    const server = await createRealtimeServer({ schedule: (callback) => { scheduled.push(callback); } });
+    servers.push(server);
+    const clients = Array.from({ length: 4 }, () => createClient(server.url, { transports: ['websocket'], forceNew: true }));
+    const [host, ...players] = clients;
+    await Promise.all(clients.map(waitForConnect));
+    const created = await emitCreate(host, { name: '자동 전환 4인 방', maxPlayers: 4, timerSeconds: 60, nickname: '방장' });
+    if (!created.ok) throw new Error('Room creation unexpectedly failed.');
+    await Promise.all(players.map((client, index) => emitJoin(client, {
+      roomId: created.room.code,
+      inviteToken: created.inviteToken,
+      nickname: `학생${index + 1}`
+    })));
+
+    const roles = Promise.all(clients.map(async (client) => ({ client, role: await oncePrivateRole(client) })));
+    await emitStart(host, created.room.code);
+    const mafiaNight = onceGameState(host);
+    scheduled.shift()?.();
+    await expect(mafiaNight).resolves.toMatchObject({ phase: 'night-mafia' });
+
+    const assignedRoles = await roles;
+    const mafia = assignedRoles.find(({ role }) => role.role === 'mafia');
+    const doctor = assignedRoles.find(({ role }) => role.role === 'doctor');
+    const mafiaTarget = assignedRoles.find(({ role }) => role.role === 'citizen');
+    if (!mafia?.client.id || !doctor?.client.id || !mafiaTarget?.client.id) {
+      throw new Error('The four-player preset must assign mafia, doctor, and citizens.');
+    }
+
+    const doctorNight = onceGameState(host);
+    await expect(emitMafiaTarget(mafia.client, created.room.code, mafiaTarget.client.id)).resolves.toEqual({ ok: true });
+    await expect(doctorNight).resolves.toMatchObject({ phase: 'night-doctor' });
+
+    const dayBriefing = onceGameState(host);
+    await expect(emitDoctorProtect(doctor.client, created.room.code, mafiaTarget.client.id)).resolves.toEqual({ ok: true });
+    const briefing = await dayBriefing;
+    expect(briefing).toMatchObject({ phase: 'day-briefing' });
+
+    const dayVote = onceGameState(host);
+    await expect(emitSkip(host, created.room.code, briefing.revision)).resolves.toEqual({ ok: true });
+    await expect(dayVote).resolves.toMatchObject({ phase: 'day-vote' });
+    const result = onceGameState(host);
+    await Promise.all(clients.map((client) => emitDayVote(client, created.room.code, mafia.client.id!)));
+    await expect(result).resolves.toMatchObject({ phase: 'result', winner: 'citizens' });
+    clients.forEach((client) => client.close());
+  });
+
   it('returns all remaining participants to the lobby when the host leaves the result screen', async () => {
     const scheduled: (() => void)[] = [];
     const server = await createRealtimeServer({ schedule: (callback) => { scheduled.push(callback); } });
@@ -448,16 +495,21 @@ describe('createRealtimeServer', () => {
     const roles = await privateRoles;
     const mafia = roles.find(({ role }) => role.role === 'mafia');
     const citizen = roles.find(({ role }) => role.role === 'citizen');
-    if (!mafia || !citizen || !citizen.client.id) {
-      throw new Error('Expected a connected mafia and citizen.');
+    const doctor = roles.find(({ role }) => role.role === 'doctor');
+    if (!mafia || !citizen || !doctor || !citizen.client.id || !doctor.client.id) {
+      throw new Error('Expected connected mafia, doctor, and citizen players.');
     }
 
     expect(await emitMafiaTarget(citizen.client, created.room.code, citizen.client.id)).toEqual({
       ok: false,
       code: 'command-rejected'
     });
-    const dayBriefing = onceGameState(host);
+    const doctorNight = onceGameState(host);
     expect(await emitMafiaTarget(mafia.client, created.room.code, citizen.client.id)).toMatchObject({ ok: true });
+
+    await expect(doctorNight).resolves.toMatchObject({ phase: 'night-doctor' });
+    const dayBriefing = onceGameState(host);
+    expect(await emitDoctorProtect(doctor.client, created.room.code, doctor.client.id)).toMatchObject({ ok: true });
 
     await expect(dayBriefing).resolves.toMatchObject({
       phase: 'day-briefing',
@@ -573,6 +625,9 @@ describe('createRealtimeServer', () => {
     const mafiaNight = onceGameState(host);
     scheduled.shift()?.();
     await expect(mafiaNight).resolves.toMatchObject({ phase: 'night-mafia' });
+    const doctorNight = onceGameState(host);
+    scheduled.shift()?.();
+    await expect(doctorNight).resolves.toMatchObject({ phase: 'night-doctor' });
     const policeNight = onceGameState(host);
     scheduled.shift()?.();
     await expect(policeNight).resolves.toMatchObject({ phase: 'night-police' });
@@ -607,6 +662,9 @@ describe('createRealtimeServer', () => {
     const mafiaNight = onceGameState(host);
     scheduled.shift()?.();
     await expect(mafiaNight).resolves.toMatchObject({ phase: 'night-mafia' });
+    const doctorNight = onceGameState(host);
+    scheduled.shift()?.();
+    await expect(doctorNight).resolves.toMatchObject({ phase: 'night-doctor' });
     const dayBriefing = onceGameState(host);
     scheduled.shift()?.();
     await expect(dayBriefing).resolves.toMatchObject({ phase: 'day-briefing' });

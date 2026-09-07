@@ -5,13 +5,13 @@ import {
 } from '../packages/contracts/src/game-presets.js';
 
 describe('createRolePreset', () => {
-  it('assigns one mafia and three citizens to a four-player game', () => {
+  it('assigns one mafia, two citizens, and one doctor to a four-player game', () => {
     expect(createRolePreset(4)).toEqual({
       playerCount: 4,
       mafia: 1,
-      doctor: 0,
+      doctor: 1,
       police: 0,
-      citizen: 3
+      citizen: 2
     });
   });
 
@@ -25,13 +25,13 @@ describe('createRolePreset', () => {
     });
   });
 
-  it('adds one police officer but no doctor to a five-player game', () => {
+  it('adds one doctor and one police officer to a five-player game', () => {
     expect(createRolePreset(5)).toEqual({
       playerCount: 5,
       mafia: 1,
-      doctor: 0,
+      doctor: 1,
       police: 1,
-      citizen: 3
+      citizen: 2
     });
   });
 
@@ -47,15 +47,17 @@ describe('createRolePreset', () => {
 });
 
 describe('nextGamePhase', () => {
-  it('skips doctor and police phases when a four-player preset has neither role', () => {
+  it('runs the doctor phase after the mafia phase in a four-player game', () => {
     const preset = createRolePreset(4);
 
-    expect(nextGamePhase('night-mafia', preset)).toBe('day-briefing');
+    expect(nextGamePhase('night-mafia', preset)).toBe('night-doctor');
+    expect(nextGamePhase('night-doctor', preset)).toBe('day-briefing');
   });
 
-  it('skips the doctor phase but keeps the police phase in a five-player game', () => {
+  it('runs doctor and police phases in a five-player game', () => {
     const preset = createRolePreset(5);
 
-    expect(nextGamePhase('night-mafia', preset)).toBe('night-police');
+    expect(nextGamePhase('night-mafia', preset)).toBe('night-doctor');
+    expect(nextGamePhase('night-doctor', preset)).toBe('night-police');
   });
 });

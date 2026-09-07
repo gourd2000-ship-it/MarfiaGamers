@@ -17,6 +17,7 @@ import {
   type StartRoomResponse
 } from '@marfia/contracts/socket-events';
 import { ConnectionStatus, type ConnectionState } from './components/connection-status.js';
+import { CurrentPlayerBadge } from './components/current-player-badge.js';
 import { CreateRoomForm, type CreateRoomValues } from './features/lobby/create-room-form.js';
 import { InviteCard } from './features/lobby/invite-card.js';
 import { JoinRoomForm, type JoinRoomValues } from './features/lobby/join-room-form.js';
@@ -50,6 +51,9 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const inviteRoomCode = roomCodeFromPath(window.location.pathname);
   const inviteTokenFromUrl = new URLSearchParams(window.location.search).get('token');
+  const currentPlayerNickname = lobbyPlayers.find((player) => player.id === socketRef.current?.id)?.nickname
+    ?? gamePlayers.find((player) => player.id === socketRef.current?.id)?.nickname
+    ?? null;
 
   function resetGameState() {
     latestRevisionRef.current = 0;
@@ -359,6 +363,7 @@ export function App() {
             <h1>마피아 게이머즈</h1>
           </div>
         </div>
+        <CurrentPlayerBadge nickname={currentPlayerNickname} />
         {gamePhase ? <GameStatusBar endsAt={phaseEndsAt} isSkipping={isSkipping} onSkip={isHost && gamePhase !== 'result' ? () => { void skipPhase(); } : undefined} phase={gamePhase} /> : null}
         <ConnectionStatus state={connectionState} />
       </header>
