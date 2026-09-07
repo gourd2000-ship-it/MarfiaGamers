@@ -8,6 +8,7 @@ import {
   type PrivateRole,
   type PublicGameState,
   type PublicRoomState,
+  type ReturnToLobbyResponse,
   type StartRoomResponse,
   type CloseRoomResponse,
   type GameCommandResponse
@@ -165,6 +166,40 @@ describe('createRealtimeServer', () => {
     host.close();
   });
 
+  it('lets a participant leave a room from the result controls without disconnecting the browser', async () => {
+    const server = await createRealtimeServer();
+    servers.push(server);
+    const host = createClient(server.url, { transports: ['websocket'], forceNew: true });
+    const player = createClient(server.url, { transports: ['websocket'], forceNew: true });
+    await Promise.all([waitForConnect(host), waitForConnect(player)]);
+    const created = await emitCreate(host, { name: '나가기 방', maxPlayers: 2, timerSeconds: 60, nickname: '방장' });
+    if (!created.ok) throw new Error('Room creation unexpectedly failed.');
+    await emitJoin(player, { roomId: created.room.code, inviteToken: created.inviteToken, nickname: '학생' });
+
+    const resignedState = waitForResignedPlayer(host, '학생');
+    expect(await emitLeave(player, created.room.code)).toEqual({ ok: true });
+    await expect(resignedState).resolves.toMatchObject({ playerCount: 1 });
+    expect(player.connected).toBe(true);
+    host.close();
+    player.close();
+  });
+
+  it('does not resign a participant when a leave request names a different room', async () => {
+    const server = await createRealtimeServer({ schedule: () => undefined });
+    servers.push(server);
+    const host = createClient(server.url, { transports: ['websocket'], forceNew: true });
+    const player = createClient(server.url, { transports: ['websocket'], forceNew: true });
+    await Promise.all([waitForConnect(host), waitForConnect(player)]);
+    const created = await emitCreate(host, { name: '잘못된 퇴장 요청', maxPlayers: 2, timerSeconds: 60, nickname: '방장' });
+    if (!created.ok) throw new Error('Room creation unexpectedly failed.');
+    await emitJoin(player, { roomId: created.room.code, inviteToken: created.inviteToken, nickname: '학생' });
+
+    expect(await emitLeave(player, 'OTHERROOM')).toEqual({ ok: false, code: 'room-not-found' });
+    expect(await emitStart(host, created.room.code)).toMatchObject({ ok: true, room: { playerCount: 2 } });
+    host.close();
+    player.close();
+  });
+
   it('transfers host authority to the first remaining active participant after a disconnect', async () => {
     const server = await createRealtimeServer({ schedule: () => undefined });
     servers.push(server);
@@ -198,6 +233,64 @@ describe('createRealtimeServer', () => {
     await expect(nextHostState).resolves.toMatchObject({ playerCount: 4 });
     expect(await emitStart(players[0], created.room.code)).toMatchObject({ ok: true, room: { status: 'in-game' } });
     players.forEach((client) => client.close());
+  });
+
+  it('automatically advances after the final mafia submits a valid target', async () => {
+    const scheduled: (() => void)[] = [];
+    const server = await createRealtimeServer({ schedule: (callback) => { scheduled.push(callback); } });
+    servers.push(server);
+    const host = createClient(server.url, { transports: ['websocket'], forceNew: true });
+    const player = createClient(server.url, { transports: ['websocket'], forceNew: true });
+    await Promise.all([waitForConnect(host), waitForConnect(player)]);
+    const created = await emitCreate(host, { name: '자동 진행 방', maxPlayers: 2, timerSeconds: 60, nickname: '방장' });
+    if (!created.ok) throw new Error('Room creation unexpectedly failed.');
+    await emitJoin(player, { roomId: created.room.code, inviteToken: created.inviteToken, nickname: '학생' });
+
+    const roles = Promise.all([host, player].map(async (client) => ({ client, role: await oncePrivateRole(client) })));
+    await emitStart(host, created.room.code);
+    const mafiaNight = onceGameState(host);
+    scheduled.shift()?.();
+    await expect(mafiaNight).resolves.toMatchObject({ phase: 'night-mafia' });
+
+    const mafia = (await roles).find(({ role }) => role.role === 'mafia');
+    if (!mafia?.client.id) throw new Error('Expected a mafia player.');
+    const target = mafia.client.id === host.id ? player : host;
+    const dayBriefing = onceGameState(host);
+
+    expect(await emitMafiaTarget(mafia.client, created.room.code, target.id!)).toEqual({ ok: true });
+    await expect(dayBriefing).resolves.toMatchObject({ phase: 'result', winner: 'mafia' });
+    host.close();
+    player.close();
+  });
+
+  it('returns all remaining participants to the lobby when the host leaves the result screen', async () => {
+    const scheduled: (() => void)[] = [];
+    const server = await createRealtimeServer({ schedule: (callback) => { scheduled.push(callback); } });
+    servers.push(server);
+    const host = createClient(server.url, { transports: ['websocket'], forceNew: true });
+    const player = createClient(server.url, { transports: ['websocket'], forceNew: true });
+    await Promise.all([waitForConnect(host), waitForConnect(player)]);
+    const created = await emitCreate(host, { name: '로비 복귀 방', maxPlayers: 2, timerSeconds: 60, nickname: '방장' });
+    if (!created.ok) throw new Error('Room creation unexpectedly failed.');
+    await emitJoin(player, { roomId: created.room.code, inviteToken: created.inviteToken, nickname: '학생' });
+
+    const roles = Promise.all([host, player].map(async (client) => ({ client, role: await oncePrivateRole(client) })));
+    await emitStart(host, created.room.code);
+    const mafiaNight = onceGameState(host);
+    scheduled.shift()?.();
+    await expect(mafiaNight).resolves.toMatchObject({ phase: 'night-mafia' });
+    const mafia = (await roles).find(({ role }) => role.role === 'mafia');
+    if (!mafia?.client.id) throw new Error('Expected a mafia player.');
+    const target = mafia.client.id === host.id ? player : host;
+    const result = onceGameState(host);
+    await emitMafiaTarget(mafia.client, created.room.code, target.id!);
+    await expect(result).resolves.toMatchObject({ phase: 'result' });
+
+    const lobby = onceRoomState(player);
+    expect(await emitReturnToLobby(host, created.room.code)).toMatchObject({ ok: true, room: { status: 'lobby' } });
+    await expect(lobby).resolves.toMatchObject({ status: 'lobby', playerCount: 2 });
+    host.close();
+    player.close();
   });
 
   it('lets the host close a room and rejects future joins without retaining its game state', async () => {
@@ -363,9 +456,8 @@ describe('createRealtimeServer', () => {
       ok: false,
       code: 'command-rejected'
     });
-    expect(await emitMafiaTarget(mafia.client, created.room.code, citizen.client.id)).toMatchObject({ ok: true });
     const dayBriefing = onceGameState(host);
-    scheduled.shift()?.();
+    expect(await emitMafiaTarget(mafia.client, created.room.code, citizen.client.id)).toMatchObject({ ok: true });
 
     await expect(dayBriefing).resolves.toMatchObject({
       phase: 'day-briefing',
@@ -526,9 +618,8 @@ describe('createRealtimeServer', () => {
     if (!mafia?.client.id) {
       throw new Error('Expected a mafia client.');
     }
-    await Promise.all(clients.map((client) => emitDayVote(client, created.room.code, mafia.client.id!)));
     const result = onceGameState(host);
-    scheduled.shift()?.();
+    await Promise.all(clients.map((client) => emitDayVote(client, created.room.code, mafia.client.id!)));
 
     await expect(result).resolves.toMatchObject({
       phase: 'result',
@@ -536,14 +627,14 @@ describe('createRealtimeServer', () => {
       eliminatedPlayerId: mafia.client.id,
       voteTotals: { [mafia.client.id]: 4 }
     });
-    expect(scheduled).toHaveLength(0);
+    expect(scheduled).toHaveLength(1);
 
     const rematchRole = oncePrivateRole(host);
     const rematchState = onceGameState(host);
     expect(await emitRematch(host, created.room.code)).toMatchObject({ ok: true, room: { status: 'in-game' } });
     await expect(rematchState).resolves.toMatchObject({ phase: 'role-reveal' });
     await expect(rematchRole).resolves.toHaveProperty('role');
-    expect(scheduled).toHaveLength(1);
+    expect(scheduled).toHaveLength(2);
     clients.forEach((client) => client.close());
   });
 });
@@ -662,6 +753,24 @@ function emitDayVote(
 ): Promise<GameCommandResponse> {
   return new Promise((resolve) => {
     client.emit(SOCKET_EVENTS.gameDayVote, { roomId, targetPlayerId }, resolve);
+  });
+}
+
+function emitLeave(
+  client: ReturnType<typeof createClient>,
+  roomId: string
+): Promise<CloseRoomResponse> {
+  return new Promise((resolve) => {
+    client.emit(SOCKET_EVENTS.roomLeave, { roomId }, resolve);
+  });
+}
+
+function emitReturnToLobby(
+  client: ReturnType<typeof createClient>,
+  roomId: string
+): Promise<ReturnToLobbyResponse> {
+  return new Promise((resolve) => {
+    client.emit(SOCKET_EVENTS.roomReturnToLobby, { roomId }, resolve);
   });
 }
 

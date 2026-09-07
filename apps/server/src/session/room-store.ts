@@ -4,6 +4,7 @@ import {
   closeRoom,
   joinRoom,
   resignPlayer,
+  returnToLobby,
   startRoom,
   type CreateRoomInput,
   type RoomSession
@@ -61,6 +62,17 @@ export class RoomStore {
     const closed = closeRoom(room, playerId);
     this.rooms.delete(code);
     return closed;
+  }
+
+  returnToLobby(code: string, playerId: string): RoomSession | undefined {
+    const room = this.rooms.get(code);
+    if (!room) {
+      return undefined;
+    }
+
+    const updated = returnToLobby(room, playerId);
+    this.rooms.set(code, updated);
+    return updated;
   }
 
   resign(playerId: string): RoomSession | undefined {

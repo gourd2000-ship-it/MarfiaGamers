@@ -7,7 +7,7 @@ import { RoleActionPicker } from '../apps/web/src/features/game/role-action-pick
 describe('RoleActionPicker', () => {
   afterEach(cleanup);
 
-  it('submits the selected active player for a private role action', async () => {
+  it('submits a private role action only after confirming the selected player', async () => {
     const onSelect = vi.fn().mockResolvedValue(true);
     render(<RoleActionPicker
       actionLabel="보호"
@@ -22,10 +22,12 @@ describe('RoleActionPicker', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '하늘 보호' }));
 
-    expect(onSelect).toHaveBeenCalledWith('p1');
+    expect(onSelect).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: '바다 보호' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: '하늘 보호' })).toHaveClass('player-choice');
-    await waitFor(() => expect(screen.getByRole('button', { name: '하늘 보호' })).toHaveAttribute('aria-pressed', 'true'));
-    expect(screen.getByText('선택됨')).toBeVisible();
+    expect(screen.getByRole('button', { name: '하늘 보호' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: '선택 완료' }));
+    await waitFor(() => expect(onSelect).toHaveBeenCalledWith('p1'));
+    expect(screen.getByText('선택 완료')).toBeVisible();
   });
 });

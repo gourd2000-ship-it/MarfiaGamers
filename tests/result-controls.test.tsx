@@ -10,11 +10,14 @@ describe('ResultControls', () => {
   it('offers a host controlled rematch and room close action after the result', () => {
     const onRematch = vi.fn();
     const onClose = vi.fn();
-    render(<ResultControls onClose={onClose} onRematch={onRematch} />);
+    const onReturnToLobby = vi.fn();
+    render(<ResultControls onClose={onClose} onRematch={onRematch} {...{ onReturnToLobby }} />);
 
+    fireEvent.click(screen.getByRole('button', { name: '로비로 돌아가기' }));
     fireEvent.click(screen.getByRole('button', { name: '재경기 시작' }));
     fireEvent.click(screen.getByRole('button', { name: '방 종료' }));
 
+    expect(onReturnToLobby).toHaveBeenCalledOnce();
     expect(onRematch).toHaveBeenCalledOnce();
     expect(onClose).toHaveBeenCalledOnce();
     expect(screen.getByRole('region', { name: '결과 관리' })).toHaveClass('result-controls');

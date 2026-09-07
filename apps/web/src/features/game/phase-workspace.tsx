@@ -25,7 +25,9 @@ export interface PhaseWorkspaceProps {
   onDoctorProtect: (targetPlayerId: string) => boolean | Promise<boolean>;
   onPoliceInvestigate: (targetPlayerId: string) => boolean | Promise<boolean>;
   onRematch: () => void;
+  onReturnToLobby: () => void;
   onClose: () => void;
+  onLeave: () => void;
 }
 
 export function PhaseWorkspace(props: PhaseWorkspaceProps) {
@@ -48,7 +50,8 @@ export function PhaseWorkspace(props: PhaseWorkspaceProps) {
       {phase === 'day-briefing' ? <p className="phase-instruction">밤 결과를 확인하고 낮 투표를 준비하세요.</p> : null}
       {props.voteTotals && (phase === 'day-briefing' || phase === 'day-revote') ? <VoteResultNotice players={props.players} voteTotals={props.voteTotals} /> : null}
       {phase === 'result' && props.winner ? <GameResultPanel winner={props.winner} /> : null}
-      {phase === 'result' && props.isHost ? <ResultControls onClose={props.onClose} onRematch={props.onRematch} /> : null}
+      {phase === 'result' && props.isHost ? <ResultControls onClose={props.onClose} onRematch={props.onRematch} onReturnToLobby={props.onReturnToLobby} /> : null}
+      {phase === 'result' ? <button className="button-secondary" onClick={props.onLeave} type="button">게임 나가기</button> : null}
       {phase === 'night-police' && props.policeResult ? <p className="private-result" role="status">최근 조사 결과: 선택한 참가자는 {props.policeResult.alignment === 'mafia' ? '마피아' : '시민'}입니다.</p> : null}
       {shouldWait(props) ? <p className="waiting-notice" role="status">다른 참가자의 행동을 기다리고 있습니다.</p> : null}
     </section>

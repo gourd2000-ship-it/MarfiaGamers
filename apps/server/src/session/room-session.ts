@@ -125,6 +125,18 @@ export function closeRoom(room: RoomSession, playerId: string): RoomSession {
   return { ...room, status: 'closed' };
 }
 
+export function returnToLobby(room: RoomSession, playerId: string): RoomSession {
+  const player = room.players.find((candidate) => candidate.id === playerId);
+  if (!player?.isHost || player.status !== 'active') {
+    throw new Error('Only the host can return the room to the lobby.');
+  }
+  if (room.status !== 'in-game') {
+    throw new Error('Only an in-game room can return to the lobby.');
+  }
+
+  return { ...room, status: 'lobby' };
+}
+
 function normalizeNickname(nickname: string): string {
   const normalized = nickname.trim();
   if (normalized.length < 1 || normalized.length > 12) {

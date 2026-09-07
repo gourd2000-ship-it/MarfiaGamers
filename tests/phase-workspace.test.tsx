@@ -11,6 +11,7 @@ const players = [
 
 function renderWorkspace(overrides: Partial<Parameters<typeof PhaseWorkspace>[0]> = {}) {
   const onMafiaTarget = vi.fn();
+  const onLeave = vi.fn();
   render(<PhaseWorkspace
     eliminatedNickname={null}
     canAct={true}
@@ -22,6 +23,8 @@ function renderWorkspace(overrides: Partial<Parameters<typeof PhaseWorkspace>[0]
     onMafiaTarget={onMafiaTarget}
     onPoliceInvestigate={vi.fn()}
     onRematch={vi.fn()}
+    onReturnToLobby={vi.fn()}
+    onLeave={onLeave}
     phase="night-mafia"
     players={players}
     policeResult={null}
@@ -30,7 +33,7 @@ function renderWorkspace(overrides: Partial<Parameters<typeof PhaseWorkspace>[0]
     winner={null}
     {...overrides}
   />);
-  return { onMafiaTarget };
+  return { onMafiaTarget, onLeave };
 }
 
 describe('PhaseWorkspace', () => {
@@ -54,14 +57,17 @@ describe('PhaseWorkspace', () => {
     const { onMafiaTarget } = renderWorkspace({ mafiaPlayerIds: ['p1'], role: 'mafia' });
 
     fireEvent.click(screen.getByRole('button', { name: '바다 선택' }));
+    fireEvent.click(screen.getByRole('button', { name: '선택 완료' }));
     expect(onMafiaTarget).toHaveBeenCalledWith('p2');
     expect(screen.queryByRole('button', { name: '하늘 선택' })).not.toBeInTheDocument();
   });
 
   it('keeps result management controls exclusive to the host', () => {
-    renderWorkspace({ phase: 'result', winner: 'citizens' });
+    const { onLeave } = renderWorkspace({ phase: 'result', winner: 'citizens' });
     expect(screen.getByText('시민 팀 승리')).toBeVisible();
     expect(screen.queryByRole('button', { name: '재경기 시작' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '게임 나가기' }));
+    expect(onLeave).toHaveBeenCalledOnce();
 
     cleanup();
     renderWorkspace({ isHost: true, phase: 'result', winner: 'citizens' });

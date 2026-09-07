@@ -16,12 +16,16 @@ export function RoleActionPicker({
 }) {
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(false);
 
-  async function submitAction(targetPlayerId: string) {
+  async function submitAction() {
+    if (!selectedPlayerId) return;
     setIsSubmitting(true);
     try {
-      if (await onSelect(targetPlayerId)) {
-        setSelectedPlayerId(targetPlayerId);
+      if (await onSelect(selectedPlayerId)) {
+        setIsSubmitted(true);
+      } else {
+        setSelectedPlayerId(null);
       }
     } finally {
       setIsSubmitting(false);
@@ -34,11 +38,14 @@ export function RoleActionPicker({
       <p>{description}</p>
       <div className="selection-grid">
         {players.filter((player) => player.status === 'alive').map((player) => (
-          <button aria-pressed={selectedPlayerId === player.id} className="player-choice" disabled={isSubmitting} key={player.id} onClick={() => void submitAction(player.id)} type="button">
+          <button aria-pressed={selectedPlayerId === player.id} className="player-choice" disabled={isSubmitting || isSubmitted} key={player.id} onClick={() => setSelectedPlayerId(player.id)} type="button">
             {player.nickname} {actionLabel}{selectedPlayerId === player.id ? <span aria-hidden="true" className="selection-confirmed">선택됨</span> : null}
           </button>
         ))}
       </div>
+      <button className="button-primary" disabled={!selectedPlayerId || isSubmitting || isSubmitted} onClick={() => void submitAction()} type="button">
+        선택 완료
+      </button>
     </section>
   );
 }

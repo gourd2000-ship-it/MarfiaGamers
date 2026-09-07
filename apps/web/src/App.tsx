@@ -12,6 +12,7 @@ import {
   type PublicGamePlayer,
   type PublicRoomState,
   type RoomSummary,
+  type ReturnToLobbyResponse,
   type ServerToClientEvents,
   type StartRoomResponse
 } from '@marfia/contracts/socket-events';
@@ -50,13 +51,8 @@ export function App() {
   const inviteRoomCode = roomCodeFromPath(window.location.pathname);
   const inviteTokenFromUrl = new URLSearchParams(window.location.search).get('token');
 
-  function resetRoomState(message: string) {
-    hadRoomRef.current = false;
+  function resetGameState() {
     latestRevisionRef.current = 0;
-    setRoom(null);
-    setLobbyPlayers([]);
-    setInviteToken(null);
-    setIsHost(false);
     setPrivateRole(null);
     setMafiaPlayerIds([]);
     setGamePhase(null);
@@ -67,6 +63,15 @@ export function App() {
     setEliminatedPlayerId(null);
     setVoteTotals(null);
     setIsSkipping(false);
+  }
+
+  function resetRoomState(message: string) {
+    hadRoomRef.current = false;
+    resetGameState();
+    setRoom(null);
+    setLobbyPlayers([]);
+    setInviteToken(null);
+    setIsHost(false);
     setError(message);
     window.history.replaceState({}, '', '/');
   }
@@ -89,6 +94,9 @@ export function App() {
       }
 
       hadRoomRef.current = true;
+      if (nextRoom.status === 'lobby') {
+        resetGameState();
+      }
       setRoom(nextRoom);
       setLobbyPlayers(nextRoom.players);
       setIsHost(nextRoom.players.some((player) =>
@@ -315,6 +323,32 @@ export function App() {
     });
   }
 
+  function returnToLobby() {
+    if (!room || !socketRef.current?.connected) {
+      return;
+    }
+
+    socketRef.current.emit(SOCKET_EVENTS.roomReturnToLobby, { roomId: room.code }, (response: ReturnToLobbyResponse) => {
+      if (!response.ok) {
+        setError('로비로 돌아갈 수 없습니다. 게임 결과와 방장 권한을 확인해 주세요.');
+      }
+    });
+  }
+
+  function leaveRoom() {
+    if (!room || !socketRef.current?.connected) {
+      return;
+    }
+
+    socketRef.current.emit(SOCKET_EVENTS.roomLeave, { roomId: room.code }, (response: CloseRoomResponse) => {
+      if (!response.ok) {
+        setError('게임에서 나갈 수 없습니다. 연결 상태를 확인해 주세요.');
+        return;
+      }
+      resetRoomState('게임에서 나왔습니다. 새 방을 만들거나 초대 링크로 참여해 주세요.');
+    });
+  }
+
   return (
     <main className="app-shell">
       <header className="app-header">
@@ -344,11 +378,13 @@ export function App() {
                 isHost={isHost}
                 mafiaPlayerIds={mafiaPlayerIds}
                 onClose={closeRoom}
+                onLeave={leaveRoom}
                 onDayVote={submitDayVote}
                 onDoctorProtect={submitDoctorProtection}
                 onMafiaTarget={submitMafiaTarget}
                 onPoliceInvestigate={submitPoliceInvestigation}
                 onRematch={rematch}
+                onReturnToLobby={returnToLobby}
                 phase={gamePhase}
                 players={gamePlayers}
                 policeResult={policeResult}

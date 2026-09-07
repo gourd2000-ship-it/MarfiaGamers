@@ -12,12 +12,16 @@ export function DayVotePicker({
 }) {
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(false);
 
-  async function submitVote(targetPlayerId: string) {
+  async function submitVote() {
+    if (!selectedPlayerId) return;
     setIsSubmitting(true);
     try {
-      if (await onVote(targetPlayerId)) {
-        setSelectedPlayerId(targetPlayerId);
+      if (await onVote(selectedPlayerId)) {
+        setIsSubmitted(true);
+      } else {
+        setSelectedPlayerId(null);
       }
     } finally {
       setIsSubmitting(false);
@@ -30,11 +34,14 @@ export function DayVotePicker({
       <p>{isRevote ? '동점입니다. 마피아를 다시 선택해주세요.' : '마피아를 선택해주세요. 개인 선택은 다른 참가자에게 공개되지 않습니다.'}</p>
       <div className="selection-grid">
         {players.filter((player) => player.status === 'alive').map((player) => (
-          <button aria-pressed={selectedPlayerId === player.id} className="player-choice" disabled={isSubmitting} key={player.id} onClick={() => void submitVote(player.id)} type="button">
+          <button aria-pressed={selectedPlayerId === player.id} className="player-choice" disabled={isSubmitting || isSubmitted} key={player.id} onClick={() => setSelectedPlayerId(player.id)} type="button">
             {player.nickname}에게 투표{selectedPlayerId === player.id ? <span aria-hidden="true" className="selection-confirmed">선택됨</span> : null}
           </button>
         ))}
       </div>
+      <button className="button-primary" disabled={!selectedPlayerId || isSubmitting || isSubmitted} onClick={() => void submitVote()} type="button">
+        선택 완료
+      </button>
     </section>
   );
 }

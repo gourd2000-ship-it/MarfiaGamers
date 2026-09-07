@@ -8,9 +8,11 @@ import {
   dayVoteSchema,
   doctorProtectSchema,
   joinRoomSchema,
+  leaveRoomSchema,
   mafiaTargetSchema,
   policeInvestigateSchema,
   rematchRoomSchema,
+  returnToLobbySchema,
   skipPhaseSchema,
   startRoomSchema,
   type ClientToServerEvents,
@@ -103,6 +105,37 @@ export async function createRealtimeServer(
 
       advanceRoomPhase(room, current, revision);
     }, room.timerSeconds * 1000);
+  };
+
+  const advanceAfterAllRequiredSubmissions = (room: RoomSession, game: GameState) => {
+    if (!hasAllRequiredSubmissions(game)) {
+      return;
+    }
+
+    const revision = revisions.get(room.code);
+    if (revision === undefined) {
+      return;
+    }
+    advanceRoomPhase(room, game, revision);
+  };
+
+  const publishResignation = (room: RoomSession, playerId: string) => {
+    io.to(room.code).emit(SOCKET_EVENTS.roomState, toPublicRoomState(room));
+    const game = games.get(room.code);
+    if (!game) {
+      return;
+    }
+
+    const resignedGame = resignGamePlayer(game, playerId);
+    games.set(room.code, resignedGame);
+    const revision = (revisions.get(room.code) ?? 0) + 1;
+    revisions.set(room.code, revision);
+    io.to(room.code).emit(SOCKET_EVENTS.gamePublicState, toPublicGameState(
+      room,
+      resignedGame,
+      revision,
+      phaseEndsAt.get(room.code) ?? null
+    ));
   };
 
   const sendPrivateRoles = (room: RoomSession, game: GameState) => {
@@ -273,6 +306,63 @@ export async function createRealtimeServer(
       }
     });
 
+    socket.on(SOCKET_EVENTS.roomReturnToLobby, (payload, acknowledge) => {
+      const respond = safelyAcknowledge(acknowledge);
+      const parsed = returnToLobbySchema.safeParse(payload);
+      if (!parsed.success) {
+        respond({ ok: false, code: 'invalid-payload' });
+        return;
+      }
+
+      const game = games.get(parsed.data.roomId);
+      if (!game) {
+        respond({ ok: false, code: 'room-not-found' });
+        return;
+      }
+      if (game.phase !== 'result') {
+        respond({ ok: false, code: 'room-rejected' });
+        return;
+      }
+
+      try {
+        const room = rooms.returnToLobby(parsed.data.roomId, socket.id);
+        if (!room) {
+          respond({ ok: false, code: 'room-not-found' });
+          return;
+        }
+        games.delete(room.code);
+        revisions.delete(room.code);
+        phaseEndsAt.delete(room.code);
+        respond({ ok: true, room: toRoomSummary(room) });
+        io.to(room.code).emit(SOCKET_EVENTS.roomState, toPublicRoomState(room));
+      } catch {
+        respond({ ok: false, code: 'room-rejected' });
+      }
+    });
+
+    socket.on(SOCKET_EVENTS.roomLeave, (payload, acknowledge) => {
+      const respond = safelyAcknowledge(acknowledge);
+      const parsed = leaveRoomSchema.safeParse(payload);
+      if (!parsed.success) {
+        respond({ ok: false, code: 'invalid-payload' });
+        return;
+      }
+
+      const requestedRoom = rooms.get(parsed.data.roomId);
+      if (!requestedRoom?.players.some((player) => player.id === socket.id && player.status === 'active')) {
+        respond({ ok: false, code: 'room-not-found' });
+        return;
+      }
+      const room = rooms.resign(socket.id);
+      if (!room) {
+        respond({ ok: false, code: 'room-not-found' });
+        return;
+      }
+      socket.leave(room.code);
+      publishResignation(room, socket.id);
+      respond({ ok: true });
+    });
+
     socket.on(SOCKET_EVENTS.roomRematch, (payload, acknowledge) => {
       const respond = safelyAcknowledge(acknowledge);
       const parsed = rematchRoomSchema.safeParse(payload);
@@ -322,14 +412,17 @@ export async function createRealtimeServer(
         return;
       }
 
+      const room = rooms.get(parsed.data.roomId);
       const game = games.get(parsed.data.roomId);
-      if (!game) {
+      if (!room || !game) {
         respond({ ok: false, code: 'game-not-found' });
         return;
       }
 
       try {
-        games.set(parsed.data.roomId, submitMafiaVote(game, socket.id, parsed.data.targetPlayerId));
+        const updated = submitMafiaVote(game, socket.id, parsed.data.targetPlayerId);
+        games.set(parsed.data.roomId, updated);
+        advanceAfterAllRequiredSubmissions(room, updated);
         respond({ ok: true });
       } catch {
         respond({ ok: false, code: 'command-rejected' });
@@ -344,14 +437,17 @@ export async function createRealtimeServer(
         return;
       }
 
+      const room = rooms.get(parsed.data.roomId);
       const game = games.get(parsed.data.roomId);
-      if (!game) {
+      if (!room || !game) {
         respond({ ok: false, code: 'game-not-found' });
         return;
       }
 
       try {
-        games.set(parsed.data.roomId, submitDoctorProtection(game, socket.id, parsed.data.targetPlayerId));
+        const updated = submitDoctorProtection(game, socket.id, parsed.data.targetPlayerId);
+        games.set(parsed.data.roomId, updated);
+        advanceAfterAllRequiredSubmissions(room, updated);
         respond({ ok: true });
       } catch {
         respond({ ok: false, code: 'command-rejected' });
@@ -366,8 +462,9 @@ export async function createRealtimeServer(
         return;
       }
 
+      const room = rooms.get(parsed.data.roomId);
       const game = games.get(parsed.data.roomId);
-      if (!game) {
+      if (!room || !game) {
         respond({ ok: false, code: 'game-not-found' });
         return;
       }
@@ -383,6 +480,7 @@ export async function createRealtimeServer(
           targetPlayerId: result.targetId,
           alignment: result.alignment
         });
+        advanceAfterAllRequiredSubmissions(room, updated);
         respond({ ok: true });
       } catch {
         respond({ ok: false, code: 'command-rejected' });
@@ -397,14 +495,17 @@ export async function createRealtimeServer(
         return;
       }
 
+      const room = rooms.get(parsed.data.roomId);
       const game = games.get(parsed.data.roomId);
-      if (!game) {
+      if (!room || !game) {
         respond({ ok: false, code: 'game-not-found' });
         return;
       }
 
       try {
-        games.set(parsed.data.roomId, submitDayVote(game, socket.id, parsed.data.targetPlayerId));
+        const updated = submitDayVote(game, socket.id, parsed.data.targetPlayerId);
+        games.set(parsed.data.roomId, updated);
+        advanceAfterAllRequiredSubmissions(room, updated);
         respond({ ok: true });
       } catch {
         respond({ ok: false, code: 'command-rejected' });
@@ -414,20 +515,7 @@ export async function createRealtimeServer(
     socket.on('disconnect', () => {
       const room = rooms.resign(socket.id);
       if (room) {
-        io.to(room.code).emit(SOCKET_EVENTS.roomState, toPublicRoomState(room));
-        const game = games.get(room.code);
-        if (game) {
-          const resignedGame = resignGamePlayer(game, socket.id);
-          games.set(room.code, resignedGame);
-          const revision = (revisions.get(room.code) ?? 0) + 1;
-          revisions.set(room.code, revision);
-          io.to(room.code).emit(SOCKET_EVENTS.gamePublicState, toPublicGameState(
-            room,
-            resignedGame,
-            revision,
-            phaseEndsAt.get(room.code) ?? null
-          ));
-        }
+        publishResignation(room, socket.id);
       }
     });
   });
@@ -476,6 +564,30 @@ function toAllowedOrigins(origin: string | readonly string[] | undefined): Set<s
   }
 
   return new Set(typeof origin === 'string' ? [origin] : origin);
+}
+
+function hasAllRequiredSubmissions(game: GameState): boolean {
+  const activePlayerIds = game.players
+    .map((player) => player.id)
+    .filter((playerId) => !game.eliminatedPlayerIds.includes(playerId) && !game.resignedPlayerIds.includes(playerId));
+
+  if (game.phase === 'night-mafia') {
+    const activeMafiaIds = activePlayerIds.filter((playerId) => game.roleAssignments[playerId] === 'mafia');
+    return activeMafiaIds.length > 0 && activeMafiaIds.every((playerId) => Boolean(game.mafiaVotes[playerId]));
+  }
+  if (game.phase === 'night-doctor') {
+    return activePlayerIds.some((playerId) => game.roleAssignments[playerId] === 'doctor')
+      && Boolean(game.doctorTargetId);
+  }
+  if (game.phase === 'night-police') {
+    return activePlayerIds.some((playerId) => game.roleAssignments[playerId] === 'police')
+      && Boolean(game.policeResult);
+  }
+  if (game.phase === 'day-vote' || game.phase === 'day-revote') {
+    return activePlayerIds.length > 0 && activePlayerIds.every((playerId) => Boolean(game.dayVotes[playerId]));
+  }
+
+  return false;
 }
 
 function safelyAcknowledge<T>(

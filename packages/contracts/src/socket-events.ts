@@ -13,8 +13,10 @@ export const SOCKET_EVENTS = {
   gameSkipPhase: 'game:skip-phase',
   roomCreate: 'room:create',
   roomJoin: 'room:join',
+  roomLeave: 'room:leave',
   roomClose: 'room:close',
   roomRematch: 'room:rematch',
+  roomReturnToLobby: 'room:return-to-lobby',
   roomStart: 'room:start',
   roomState: 'room:state'
 } as const;
@@ -39,6 +41,8 @@ export const startRoomSchema = z.object({
 
 export const closeRoomSchema = startRoomSchema;
 export const rematchRoomSchema = startRoomSchema;
+export const returnToLobbySchema = startRoomSchema;
+export const leaveRoomSchema = startRoomSchema;
 
 export const mafiaTargetSchema = z.object({
   roomId: z.string().trim().min(1).max(64).regex(/^[a-zA-Z0-9-]+$/),
@@ -133,6 +137,10 @@ export type CloseRoomResponse =
   | { ok: true }
   | { ok: false; code: 'invalid-payload' | 'room-not-found' | 'room-rejected' };
 
+export type ReturnToLobbyResponse =
+  | { ok: true; room: RoomSummary }
+  | { ok: false; code: 'invalid-payload' | 'room-not-found' | 'room-rejected' };
+
 export type GameCommandResponse =
   | { ok: true }
   | { ok: false; code: 'invalid-payload' | 'game-not-found' | 'command-rejected' };
@@ -151,6 +159,10 @@ export interface ClientToServerEvents {
     acknowledge?: (response: StartRoomResponse) => void
   ) => void;
   'room:close': (
+    payload: unknown,
+    acknowledge?: (response: CloseRoomResponse) => void
+  ) => void;
+  'room:leave': (
     payload: unknown,
     acknowledge?: (response: CloseRoomResponse) => void
   ) => void;
@@ -173,6 +185,10 @@ export interface ClientToServerEvents {
   'game:day-vote': (
     payload: unknown,
     acknowledge?: (response: GameCommandResponse) => void
+  ) => void;
+  'room:return-to-lobby': (
+    payload: unknown,
+    acknowledge?: (response: ReturnToLobbyResponse) => void
   ) => void;
   'game:skip-phase': (
     payload: unknown,

@@ -86,6 +86,9 @@ test('four browsers receive private roles and complete an automatic round throug
       playerPage.getByRole('button', { name: `${mafia.nickname}에게 투표` }).click()
     ));
     await Promise.all(allPlayers.map(({ page: playerPage }) =>
+      playerPage.getByRole('button', { name: '선택 완료' }).click()
+    ));
+    await Promise.all(allPlayers.map(({ page: playerPage }) =>
       expect(playerPage.getByText('시민 팀 승리')).toBeVisible({ timeout: 15_000 })
     ));
 
