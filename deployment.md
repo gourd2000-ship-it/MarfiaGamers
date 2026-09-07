@@ -4,6 +4,8 @@ Ubuntu 미니 PC를 직접 공개하는 배포는 [deployment/ubuntu/README.md](
 
 이 프로젝트는 웹 정적 호스팅과 Node.js 실시간 서버를 따로 배포한다. HTTPS 종료는 선택한 호스팅 서비스 또는 리버스 프록시가 담당하며, 브라우저는 HTTPS 페이지에서 WSS로 Socket.IO 서버에 연결한다.
 
+가정의 미니 PC와 연결한 `marfia-class.duckdns.org` 도메인은 단일 관리자만 관리한다. 공개 주소는 반드시 `https://marfia-class.duckdns.org`를 사용한다. 이 관리자는 DuckDNS·터널 또는 프록시 계정, `WEB_ORIGIN`·`VITE_SOCKET_URL` 설정, 배포와 장애 대응을 맡는다. 미니 PC는 항상 켜진 상태로 운영하며, 게임 참가자는 이 운영 권한을 받지 않는다.
+
 ## 1. 배포 환경 변수
 
 | 배포 대상 | 변수 | 예시 | 의미 |
