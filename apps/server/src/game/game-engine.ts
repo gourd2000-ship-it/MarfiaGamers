@@ -23,7 +23,11 @@ export interface GameState {
   doctorHasSelfProtected: boolean;
   policeResult?: { targetId: string; alignment: 'mafia' | 'citizen' };
   mafiaVotes: Readonly<Record<string, string>>;
-  nightResult?: { eliminatedPlayerId: string | null };
+  nightResult?: {
+    mafiaTargetId: string | null;
+    doctorTargetId: string | null;
+    eliminatedPlayerId: string | null;
+  };
   dayVotes: Readonly<Record<string, string>>;
   dayVoteResult?: { eliminatedPlayerId: string | null; voteTotals: Record<string, number>; requiresRevote: boolean };
   eliminatedPlayerIds: readonly string[];
@@ -179,7 +183,11 @@ export function resolveNight(game: GameState): GameState {
 
   const resolved = {
     ...game,
-    nightResult: { eliminatedPlayerId },
+    nightResult: {
+      mafiaTargetId,
+      doctorTargetId: doctorTargetId ?? null,
+      eliminatedPlayerId
+    },
     eliminatedPlayerIds: addEliminatedPlayer(game.eliminatedPlayerIds, eliminatedPlayerId)
   };
   const winner = getWinner(resolved);

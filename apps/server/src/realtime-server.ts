@@ -37,6 +37,7 @@ export interface RealtimeServerOptions {
   corsOrigin?: string | readonly string[];
   now?: () => number;
   schedule?: (callback: () => void, delayMs: number) => void;
+  random?: () => number;
 }
 
 export async function createRealtimeServer(
@@ -71,6 +72,7 @@ export async function createRealtimeServer(
   const phaseEndsAt = new Map<string, number | null>();
   const schedule = options.schedule ?? ((callback, delayMs) => { setTimeout(callback, delayMs); });
   const now = options.now ?? Date.now;
+  const random = options.random ?? Math.random;
 
   const advanceRoomPhase = (room: RoomSession, current: GameState, revision: number) => {
     const next = shouldResolveNight(current)
@@ -83,16 +85,17 @@ export async function createRealtimeServer(
     games.set(room.code, next);
     const nextRevision = revision + 1;
     revisions.set(room.code, nextRevision);
-    const nextPhaseEndsAt = next.phase === 'result' ? null : now() + room.timerSeconds * 1000;
+    const nextPhaseDelayMs = next.phase === 'result' ? null : phaseDelayMs(room, next, random);
+    const nextPhaseEndsAt = nextPhaseDelayMs === null ? null : now() + nextPhaseDelayMs;
     phaseEndsAt.set(room.code, nextPhaseEndsAt);
     io.to(room.code).emit(SOCKET_EVENTS.gamePublicState, toPublicGameState(room, next, nextRevision, nextPhaseEndsAt));
 
     if (next.phase !== 'result') {
-      scheduleNextPhase(room, nextRevision);
+      scheduleNextPhase(room, nextRevision, nextPhaseDelayMs ?? undefined);
     }
   };
 
-  const scheduleNextPhase = (room: RoomSession, revision: number) => {
+  const scheduleNextPhase = (room: RoomSession, revision: number, delayMs = room.timerSeconds * 1000) => {
     schedule(() => {
       if (revisions.get(room.code) !== revision) {
         return;
@@ -104,7 +107,7 @@ export async function createRealtimeServer(
       }
 
       advanceRoomPhase(room, current, revision);
-    }, room.timerSeconds * 1000);
+    }, delayMs);
   };
 
   const advanceAfterAllRequiredSubmissions = (room: RoomSession, game: GameState) => {
@@ -130,12 +133,28 @@ export async function createRealtimeServer(
     games.set(room.code, resignedGame);
     const revision = (revisions.get(room.code) ?? 0) + 1;
     revisions.set(room.code, revision);
+    const nextDelayMs = phaseDelayMs(room, resignedGame, random);
+    const nextPhaseEndsAt = resignedGame.phase === 'result' ? null : now() + nextDelayMs;
+    phaseEndsAt.set(room.code, nextPhaseEndsAt);
     io.to(room.code).emit(SOCKET_EVENTS.gamePublicState, toPublicGameState(
       room,
       resignedGame,
       revision,
-      phaseEndsAt.get(room.code) ?? null
+      nextPhaseEndsAt
     ));
+    if (resignedGame.phase !== 'result') {
+      scheduleNextPhase(room, revision, nextDelayMs);
+    }
+  };
+
+  const beginPoliceResultDisplay = (room: RoomSession, game: GameState) => {
+    const revision = (revisions.get(room.code) ?? 0) + 1;
+    const resultDisplayDelayMs = 5_000;
+    const endsAt = now() + resultDisplayDelayMs;
+    revisions.set(room.code, revision);
+    phaseEndsAt.set(room.code, endsAt);
+    io.to(room.code).emit(SOCKET_EVENTS.gamePublicState, toPublicGameState(room, game, revision, endsAt));
+    scheduleNextPhase(room, revision, resultDisplayDelayMs);
   };
 
   const sendPrivateRoles = (room: RoomSession, game: GameState) => {
@@ -480,7 +499,7 @@ export async function createRealtimeServer(
           targetPlayerId: result.targetId,
           alignment: result.alignment
         });
-        advanceAfterAllRequiredSubmissions(room, updated);
+        beginPoliceResultDisplay(room, updated);
         respond({ ok: true });
       } catch {
         respond({ ok: false, code: 'command-rejected' });
@@ -590,6 +609,23 @@ function hasAllRequiredSubmissions(game: GameState): boolean {
   return false;
 }
 
+function phaseDelayMs(room: RoomSession, game: GameState, random: () => number): number {
+  if ((game.phase === 'night-doctor' && !hasActiveRole(game, 'doctor'))
+    || (game.phase === 'night-police' && !hasActiveRole(game, 'police'))) {
+    return (20 + Math.floor(random() * 11)) * 1_000;
+  }
+
+  return room.timerSeconds * 1_000;
+}
+
+function hasActiveRole(game: GameState, role: 'doctor' | 'police'): boolean {
+  return game.players.some((player) =>
+    game.roleAssignments[player.id] === role
+    && !game.eliminatedPlayerIds.includes(player.id)
+    && !game.resignedPlayerIds.includes(player.id)
+  );
+}
+
 function safelyAcknowledge<T>(
   acknowledge: ((response: T) => void) | undefined
 ): (response: T) => void {
@@ -632,6 +668,11 @@ function toPublicGameState(
   }
   if (game.nightResult && (game.phase === 'day-briefing' || game.phase === 'result')) {
     publicState.eliminatedPlayerId = game.nightResult.eliminatedPlayerId;
+    publicState.nightResult = {
+      mafiaTargetPlayerId: game.nightResult.mafiaTargetId,
+      doctorTargetPlayerId: game.nightResult.doctorTargetId,
+      eliminatedPlayerId: game.nightResult.eliminatedPlayerId
+    };
   }
   if (game.winner) {
     publicState.winner = game.winner;

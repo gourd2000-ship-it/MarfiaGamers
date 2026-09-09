@@ -46,6 +46,7 @@ export function App() {
   const [policeResult, setPoliceResult] = useState<{ targetPlayerId: string; alignment: 'mafia' | 'citizen' } | null>(null);
   const [winner, setWinner] = useState<PublicGameState['winner'] | null>(null);
   const [eliminatedPlayerId, setEliminatedPlayerId] = useState<string | null>(null);
+  const [nightResult, setNightResult] = useState<NonNullable<PublicGameState['nightResult']> | null>(null);
   const [voteTotals, setVoteTotals] = useState<Readonly<Record<string, number>> | null>(null);
   const [isSkipping, setIsSkipping] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -118,7 +119,8 @@ export function App() {
       players,
       winner: nextWinner,
       eliminatedPlayerId: nextEliminatedPlayerId,
-      voteTotals: nextVoteTotals
+      voteTotals: nextVoteTotals,
+      nightResult: nextNightResult
     }: PublicGameState) => {
       if (revision < latestRevisionRef.current) {
         return;
@@ -135,6 +137,7 @@ export function App() {
       setGamePlayers(players);
       setWinner(nextWinner ?? null);
       setEliminatedPlayerId(nextEliminatedPlayerId ?? null);
+      setNightResult(nextNightResult ?? null);
       setVoteTotals(nextVoteTotals ?? null);
     };
     const onPrivateInvestigation = (result: { targetPlayerId: string; alignment: 'mafia' | 'citizen' }) => {
@@ -379,6 +382,7 @@ export function App() {
               {gamePhase !== 'role-reveal' ? <aside className="game-players-panel">{gamePlayers.length > 0 ? <GamePlayerList players={gamePlayers} /> : null}</aside> : null}
               <PhaseWorkspace
                 eliminatedNickname={eliminatedNickname ?? null}
+                nightResult={nightResult}
                 canAct={gamePlayers.some((player) => player.id === socketRef.current?.id && player.status === 'alive')}
                 isHost={isHost}
                 mafiaPlayerIds={mafiaPlayerIds}

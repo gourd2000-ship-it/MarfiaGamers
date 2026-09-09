@@ -105,6 +105,11 @@ button:disabled { cursor: not-allowed; opacity: .52; }
 .game-result-panel.winner-citizens { border-color: rgb(97 199 193 / 78%); background: linear-gradient(145deg, rgb(17 59 61 / 85%), rgb(23 25 35 / 94%)); }
 .game-result-panel.winner-mafia { border-color: rgb(196 59 77 / 82%); background: linear-gradient(145deg, rgb(82 22 37 / 86%), rgb(23 25 35 / 94%)); }
 .elimination-notice { color: #ffd2d8; background: rgb(196 59 77 / 15%) !important; border-color: rgb(196 59 77 / 52%) !important; font-weight: 700; }
+.night-result-notice { display: grid; gap: 8px; border: 1px solid rgb(196 59 77 / 64%); border-radius: 12px; padding: 18px; color: #ffe3e7; background: linear-gradient(145deg, rgb(94 25 42 / 88%), rgb(35 27 38 / 96%)); box-shadow: 0 0 28px rgb(196 59 77 / 20%); }
+.night-result-notice h2, .night-result-notice p { margin: 0; }
+.night-result-notice h2 { font-size: 1.25rem; }
+.night-result-notice p { font-weight: 700; line-height: 1.5; }
+.police-result-notice { margin: 0; border: 2px solid #f6c75b; border-radius: 12px; padding: 18px; color: #fff3c8; background: linear-gradient(135deg, rgb(126 85 17 / 78%), rgb(36 31 22 / 96%)); font-size: clamp(1.25rem, 4vw, 1.7rem); line-height: 1.45; text-align: center; box-shadow: 0 0 32px rgb(246 199 91 / 35%); }
 .vote-result-notice ul { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
 .vote-result-notice li { display: flex; justify-content: space-between; border-bottom: 1px solid var(--border); padding: 8px 0; }
 .result-controls { display: grid !important; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }

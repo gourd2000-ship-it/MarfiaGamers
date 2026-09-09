@@ -162,7 +162,32 @@ describe('night resolution', () => {
     const doctorNight = advanceGamePhase(withMafiaVote);
     const protectedGame = submitDoctorProtection(doctorNight, doctorId, targetId);
 
-    expect(resolveNight(protectedGame).nightResult).toEqual({ eliminatedPlayerId: null });
+    expect(resolveNight(protectedGame).nightResult).toEqual({
+      mafiaTargetId: targetId,
+      doctorTargetId: targetId,
+      eliminatedPlayerId: null
+    });
+  });
+
+  it('keeps both the mafia target and doctor treatment in the announced night result', () => {
+    const players = Array.from({ length: 6 }, (_, index) => ({ id: `p${index + 1}`, name: `Player ${index + 1}` }));
+    const started = startGame(createGame({ roomId: 'room-1', players }), () => 0);
+    const mafiaId = Object.entries(started.roleAssignments).find(([, role]) => role === 'mafia')?.[0];
+    const doctorId = Object.entries(started.roleAssignments).find(([, role]) => role === 'doctor')?.[0];
+    const targetId = Object.entries(started.roleAssignments).find(([, role]) => role === 'citizen')?.[0];
+    if (!mafiaId || !doctorId || !targetId) {
+      throw new Error('The six-player preset must include mafia, doctor and citizen.');
+    }
+
+    const mafiaNight = advanceGamePhase(started);
+    const doctorNight = advanceGamePhase(submitMafiaVote(mafiaNight, mafiaId, targetId));
+    const resolved = resolveNight(submitDoctorProtection(doctorNight, doctorId, doctorId));
+
+    expect(resolved.nightResult).toEqual({
+      mafiaTargetId: targetId,
+      doctorTargetId: doctorId,
+      eliminatedPlayerId: targetId
+    });
   });
 
   it('ends the game immediately when the mafia reaches parity after a night elimination', () => {

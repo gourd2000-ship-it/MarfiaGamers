@@ -606,9 +606,66 @@ describe('createRealtimeServer', () => {
     clients.forEach((client) => client.close());
   });
 
+  it('uses an inconspicuous 20 to 30 second delay when the doctor or police resigns', async () => {
+    const scheduled: Array<{ callback: () => void; delayMs: number }> = [];
+    const server = await createRealtimeServer({
+      random: () => 0.5,
+      schedule: (callback, delayMs) => { scheduled.push({ callback, delayMs }); }
+    });
+    servers.push(server);
+    const clients = Array.from({ length: 5 }, () => createClient(server.url, { transports: ['websocket'], forceNew: true }));
+    const [host, ...players] = clients;
+    await Promise.all(clients.map(waitForConnect));
+    const created = await emitCreate(host, { name: 'Hidden role delay', maxPlayers: 5, timerSeconds: 10, nickname: 'Host' });
+    if (!created.ok) throw new Error('Room creation unexpectedly failed.');
+    await Promise.all(players.map((client, index) => emitJoin(client, {
+      roomId: created.room.code, inviteToken: created.inviteToken, nickname: `Player${index + 1}`
+    })));
+
+    const roles = Promise.all(clients.map(async (client) => ({ client, role: await oncePrivateRole(client) })));
+    await emitStart(host, created.room.code);
+    const mafiaNight = onceGameState(host);
+    scheduled.shift()?.callback();
+    await expect(mafiaNight).resolves.toMatchObject({ phase: 'night-mafia' });
+    const doctorNight = onceGameState(host);
+    scheduled.shift()?.callback();
+    await expect(doctorNight).resolves.toMatchObject({ phase: 'night-doctor' });
+
+    const assigned = await roles;
+    const doctor = assigned.find(({ role }) => role.role === 'doctor');
+    if (!doctor) throw new Error('Expected a doctor client.');
+    const doctorId = doctor.client.id;
+    if (!doctorId) throw new Error('Expected the doctor client to have an ID.');
+    const observer = clients.find((client) => client !== doctor.client);
+    if (!observer) throw new Error('Expected an observer client.');
+    const afterResignation = waitForGameState(observer, (state) =>
+      state.players.some((player) => player.id === doctorId && player.status === 'resigned')
+    );
+    doctor.client.close();
+    await expect(afterResignation).resolves.toMatchObject({ phase: 'night-doctor' });
+    expect(scheduled.at(-1)?.delayMs).toBe(25_000);
+
+    const policePhase = onceGameState(observer);
+    scheduled.at(-1)?.callback();
+    await expect(policePhase).resolves.toMatchObject({ phase: 'night-police' });
+    const police = assigned.find(({ role }) => role.role === 'police');
+    if (!police) throw new Error('Expected a police client.');
+    const policeId = police.client.id;
+    if (!policeId) throw new Error('Expected the police client to have an ID.');
+    const policeObserver = clients.find((client) => client !== doctor.client && client !== police.client);
+    if (!policeObserver) throw new Error('Expected a police observer client.');
+    const afterPoliceResignation = waitForGameState(policeObserver, (state) =>
+      state.players.some((player) => player.id === policeId && player.status === 'resigned')
+    );
+    police.client.close();
+    await expect(afterPoliceResignation).resolves.toMatchObject({ phase: 'night-police' });
+    expect(scheduled.at(-1)?.delayMs).toBe(25_000);
+    clients.filter((client) => client !== doctor.client && client !== police.client).forEach((client) => client.close());
+  });
+
   it('sends a police investigation result only to the investigating police client', async () => {
-    const scheduled: (() => void)[] = [];
-    const server = await createRealtimeServer({ schedule: (callback) => { scheduled.push(callback); } });
+    const scheduled: Array<{ callback: () => void; delayMs: number }> = [];
+    const server = await createRealtimeServer({ schedule: (callback, delayMs) => { scheduled.push({ callback, delayMs }); } });
     servers.push(server);
     const clients = Array.from({ length: 5 }, () => createClient(server.url, { transports: ['websocket'], forceNew: true }));
     const [host, ...players] = clients;
@@ -623,13 +680,13 @@ describe('createRealtimeServer', () => {
     await emitStart(host, created.room.code);
     await reveal;
     const mafiaNight = onceGameState(host);
-    scheduled.shift()?.();
+    scheduled.shift()?.callback();
     await expect(mafiaNight).resolves.toMatchObject({ phase: 'night-mafia' });
     const doctorNight = onceGameState(host);
-    scheduled.shift()?.();
+    scheduled.shift()?.callback();
     await expect(doctorNight).resolves.toMatchObject({ phase: 'night-doctor' });
     const policeNight = onceGameState(host);
-    scheduled.shift()?.();
+    scheduled.shift()?.callback();
     await expect(policeNight).resolves.toMatchObject({ phase: 'night-police' });
 
     const assigned = await roles;
@@ -639,8 +696,16 @@ describe('createRealtimeServer', () => {
       throw new Error('Expected police and mafia clients.');
     }
     const result = oncePoliceResult(police.client);
+    const resultDisplay = onceGameState(host);
     expect(await emitPoliceInvestigate(police.client, created.room.code, mafia.client.id)).toEqual({ ok: true });
     await expect(result).resolves.toEqual({ targetPlayerId: mafia.client.id, alignment: 'mafia' });
+    await expect(resultDisplay).resolves.toMatchObject({ phase: 'night-police' });
+    expect(scheduled).toHaveLength(2);
+    expect(scheduled.at(-1)?.delayMs).toBe(5_000);
+    expect(await emitPoliceInvestigate(police.client, created.room.code, mafia.client.id)).toEqual({ ok: false, code: 'command-rejected' });
+    const dayBriefing = onceGameState(host);
+    scheduled.at(-1)?.callback();
+    await expect(dayBriefing).resolves.toMatchObject({ phase: 'day-briefing' });
     clients.forEach((client) => client.close());
   });
 
@@ -732,6 +797,19 @@ function oncePrivateRole(client: ReturnType<typeof createClient>): Promise<Priva
 
 function onceGameState(client: ReturnType<typeof createClient>): Promise<PublicGameState> {
   return new Promise((resolve) => client.once(SOCKET_EVENTS.gamePublicState, resolve));
+}
+
+function waitForGameState(
+  client: ReturnType<typeof createClient>,
+  matches: (state: PublicGameState) => boolean
+): Promise<PublicGameState> {
+  return new Promise((resolve) => {
+    client.on(SOCKET_EVENTS.gamePublicState, (state: PublicGameState) => {
+      if (matches(state)) {
+        resolve(state);
+      }
+    });
+  });
 }
 
 function onceRoomState(client: ReturnType<typeof createClient>): Promise<PublicRoomState> {

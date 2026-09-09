@@ -14,6 +14,7 @@ function renderWorkspace(overrides: Partial<Parameters<typeof PhaseWorkspace>[0]
   const onLeave = vi.fn();
   render(<PhaseWorkspace
     eliminatedNickname={null}
+    nightResult={null}
     canAct={true}
     isHost={false}
     mafiaPlayerIds={[]}
@@ -87,7 +88,38 @@ describe('PhaseWorkspace', () => {
       policeResult: { targetPlayerId: 'p2', alignment: 'mafia' },
       role: 'police'
     });
-    expect(screen.getByText('최근 조사 결과: 선택한 참가자는 마피아입니다.')).toBeVisible();
+    expect(screen.getByText('바다님은 마피아가 맞습니다.')).toBeVisible();
+  });
+
+  it('announces the full night result during the day briefing', () => {
+    renderWorkspace({
+      phase: 'day-briefing',
+      nightResult: { mafiaTargetPlayerId: 'p1', doctorTargetPlayerId: 'p2', eliminatedPlayerId: 'p1' }
+    });
+
+    expect(screen.getByRole('heading', { name: '밤 결과' })).toBeVisible();
+    expect(screen.getByText('하늘님이 마피아에게 살해당했습니다.')).toBeVisible();
+    expect(screen.getByText('의사는 바다님을 치료하였습니다.')).toBeVisible();
+  });
+
+  it('keeps the night result visible when the night action ends the game', () => {
+    renderWorkspace({
+      phase: 'result',
+      nightResult: { mafiaTargetPlayerId: 'p1', doctorTargetPlayerId: null, eliminatedPlayerId: 'p1' },
+      winner: 'mafia'
+    });
+
+    expect(screen.getByRole('heading', { name: '밤 결과' })).toBeVisible();
+  });
+
+  it('shows the police result prominently with the investigated player name', () => {
+    renderWorkspace({
+      phase: 'night-police',
+      policeResult: { targetPlayerId: 'p2', alignment: 'mafia' },
+      role: 'police'
+    });
+
+    expect(screen.getByText('바다님은 마피아가 맞습니다.').tagName).toBe('STRONG');
   });
 
   it('explains the next action while the daytime result is being announced', () => {
