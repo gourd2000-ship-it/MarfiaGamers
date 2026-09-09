@@ -30,8 +30,7 @@ export const createRoomSchema = z.object({
 });
 
 export const joinRoomSchema = z.object({
-  roomId: z.string().trim().min(1).max(64).regex(/^[a-zA-Z0-9-]+$/),
-  inviteToken: z.string().trim().length(32).regex(/^[a-f0-9]+$/),
+  roomId: z.string().trim().regex(/^\d{6}$/),
   nickname: z.string().trim().min(1).max(20)
 });
 

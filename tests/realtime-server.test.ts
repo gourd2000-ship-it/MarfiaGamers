@@ -96,6 +96,7 @@ describe('createRealtimeServer', () => {
     });
 
     const invalid = await emitJoin(client, { roomId: '', nickname: '' });
+    const invalidCode = await emitJoin(client, { roomId: 'ABC123', nickname: '학생' });
     const created = await emitCreate(client, {
       name: '1학년 2반',
       maxPlayers: 4,
@@ -110,25 +111,19 @@ describe('createRealtimeServer', () => {
       secondClient.once('connect', resolve);
       secondClient.once('connect_error', reject);
     });
-    const wrongToken = await emitJoin(secondClient, {
+    const direct = await emitJoin(secondClient, {
       roomId: created.ok ? created.room.code : 'missing-room',
-      inviteToken: '00000000000000000000000000000000',
-      nickname: '잘못된초대'
-    });
-    const valid = await emitJoin(secondClient, {
-      roomId: created.ok ? created.room.code : 'missing-room',
-      inviteToken: created.ok ? created.inviteToken : '',
       nickname: '하늘'
     });
 
     expect(invalid).toEqual({ ok: false, code: 'invalid-payload' });
-    expect(wrongToken).toEqual({ ok: false, code: 'room-rejected' });
+    expect(invalidCode).toEqual({ ok: false, code: 'invalid-payload' });
     expect(created).toMatchObject({
       ok: true,
       inviteToken: expect.stringMatching(/^[a-f0-9]{32}$/),
-      room: { name: '1학년 2반', playerCount: 1 }
+      room: { name: '1학년 2반', playerCount: 1, code: expect.stringMatching(/^\d{6}$/) }
     });
-    expect(valid).toMatchObject({
+    expect(direct).toMatchObject({
       ok: true,
       room: { playerCount: 2 },
       nickname: '하늘'

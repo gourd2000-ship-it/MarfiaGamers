@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomInt } from 'node:crypto';
 import {
   createRoom,
   closeRoom,
@@ -26,15 +26,11 @@ export class RoomStore {
 
   join(
     code: string,
-    participant: { id: string; nickname: string; inviteToken: string }
+    participant: { id: string; nickname: string }
   ): RoomSession | undefined {
     const room = this.rooms.get(code);
     if (!room) {
       return undefined;
-    }
-
-    if (participant.inviteToken !== room.inviteToken) {
-      throw new Error('The room invite token is invalid.');
     }
 
     const updated = joinRoom(room, participant);
@@ -91,7 +87,7 @@ export class RoomStore {
 
   private createUniqueCode(): string {
     for (let attempt = 0; attempt < 10; attempt += 1) {
-      const code = randomBytes(4).toString('hex').toUpperCase();
+      const code = randomInt(0, 1_000_000).toString().padStart(6, '0');
       if (!this.rooms.has(code)) {
         return code;
       }

@@ -9,7 +9,7 @@ import {
 
 const createFourPlayerRoom = () => {
   const room = createRoom({
-    code: 'ABCD12',
+    code: '123456',
     inviteToken: '0123456789abcdef0123456789abcdef',
     name: '1학년 2반',
     timerSeconds: 60,
@@ -21,6 +21,18 @@ const createFourPlayerRoom = () => {
 };
 
 describe('room session', () => {
+  it('requires a six-digit numeric room code', () => {
+    const input = {
+      inviteToken: '0123456789abcdef0123456789abcdef',
+      name: 'Test room',
+      timerSeconds: 60,
+      host: { id: 'host', nickname: 'Host' }
+    };
+
+    expect(() => createRoom({ ...input, code: 'ABC123' })).toThrow('six-digit');
+    expect(createRoom({ ...input, code: '012345' }).code).toBe('012345');
+  });
+
   it('lets only the host start a four-player room and then blocks new joins', () => {
     const room = createFourPlayerRoom();
 
@@ -68,7 +80,7 @@ describe('room session', () => {
 describe('fixed room capacity', () => {
   it('always creates a room with a twenty-player limit', () => {
     const room = createRoom({
-      code: 'CAP20',
+      code: '234567',
       inviteToken: '0123456789abcdef0123456789abcdef',
       name: '20명 방',
       timerSeconds: 60,
@@ -80,7 +92,7 @@ describe('fixed room capacity', () => {
 
   it('allows a host to start as soon as a second active player joins', () => {
     const room = createRoom({
-      code: 'TWO001',
+      code: '345678',
       inviteToken: '0123456789abcdef0123456789abcdef',
       name: '2명 방',
       timerSeconds: 60,

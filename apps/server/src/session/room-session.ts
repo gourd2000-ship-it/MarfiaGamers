@@ -27,8 +27,8 @@ export interface CreateRoomInput {
 }
 
 export function createRoom(input: CreateRoomInput): RoomSession {
-  if (!input.code.trim()) {
-    throw new Error('Room code is required.');
+  if (!/^\d{6}$/.test(input.code)) {
+    throw new Error('Room code must be a six-digit number.');
   }
   if (!/^[a-f0-9]{32}$/.test(input.inviteToken)) {
     throw new Error('Room invite token must be a 32-character hexadecimal string.');

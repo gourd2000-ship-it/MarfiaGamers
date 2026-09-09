@@ -52,7 +52,6 @@ export function App() {
   const [isSkipping, setIsSkipping] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inviteRoomCode = roomCodeFromPath(window.location.pathname);
-  const inviteTokenFromUrl = new URLSearchParams(window.location.search).get('token');
   const currentPlayerNickname = lobbyPlayers.find((player) => player.id === socketRef.current?.id)?.nickname
     ?? gamePlayers.find((player) => player.id === socketRef.current?.id)?.nickname
     ?? null;
@@ -220,7 +219,7 @@ export function App() {
 
       setIsHost(false);
       setRoom(response.room);
-      setInviteToken(values.inviteToken);
+      setInviteToken(null);
       hadRoomRef.current = true;
     });
   }
@@ -433,10 +432,13 @@ export function App() {
             </div>
           )}
           </section>
-      ) : inviteRoomCode && inviteTokenFromUrl ? (
-        <JoinRoomForm inviteToken={inviteTokenFromUrl} onJoin={joinRoom} roomCode={inviteRoomCode} />
+      ) : inviteRoomCode ? (
+        <JoinRoomForm onJoin={joinRoom} roomCode={inviteRoomCode} />
       ) : (
-        <CreateRoomForm onCreate={createRoom} />
+        <div className="lobby-entry-options">
+          <CreateRoomForm onCreate={createRoom} />
+          <JoinRoomForm onJoin={joinRoom} />
+        </div>
       )}
         {error ? <p className="error-message" role="alert">{error}</p> : null}
       </div>
@@ -445,6 +447,6 @@ export function App() {
 }
 
 function roomCodeFromPath(pathname: string): string | null {
-  const match = /^\/room\/([A-Za-z0-9-]+)$/.exec(pathname);
+  const match = /^\/room\/(\d{6})$/.exec(pathname);
   return match?.[1] ?? null;
 }

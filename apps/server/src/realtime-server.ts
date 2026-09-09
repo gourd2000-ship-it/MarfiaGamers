@@ -215,8 +215,7 @@ export async function createRealtimeServer(
       try {
         const room = rooms.join(parsed.data.roomId, {
           id: socket.id,
-          nickname: parsed.data.nickname,
-          inviteToken: parsed.data.inviteToken
+          nickname: parsed.data.nickname
         });
         if (!room) {
           respond({ ok: false, code: 'room-not-found' });
