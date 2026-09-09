@@ -65,7 +65,7 @@ describe('automatic game setup', () => {
     const firstDay = advanceGamePhase(started);
     const firstDayVote = beginDayVote(firstDay);
     const afterFirstDay = threePlayers.reduce(
-      (game, player) => submitDayVote(game, player.id, citizenIds[0]),
+      (game, player) => submitDayVote(game, player.id, player.id === citizenIds[0] ? citizenIds[1] : citizenIds[0]),
       firstDayVote
     );
     const firstNight = resolveDayVote(afterFirstDay);
@@ -212,30 +212,50 @@ describe('night resolution', () => {
 });
 
 describe('day vote', () => {
+  it('does not allow a participant to vote to exile themselves', () => {
+    const started = startGame(createGame({ roomId: 'room-1', players: fourPlayers }), () => 0);
+    const voting = beginDayVote({ ...started, phase: 'day-briefing' });
+
+    expect(() => submitDayVote(voting, 'p1', 'p1')).toThrow('cannot vote for themselves');
+  });
+
   it('reveals only candidate totals and the eliminated player after a private vote', () => {
     const started = startGame(createGame({ roomId: 'room-1', players: fourPlayers }), () => 0);
     const voting = beginDayVote({ ...started, phase: 'day-briefing' });
     const submitted = fourPlayers.reduce(
-      (game, player) => submitDayVote(game, player.id, 'p1'),
+      (game, player) => submitDayVote(game, player.id, player.id === 'p1' ? 'p2' : 'p1'),
       voting
     );
 
     expect(resolveDayVote(submitted).dayVoteResult).toEqual({
       eliminatedPlayerId: 'p1',
-      voteTotals: { p1: 4 },
+      voteTotals: { p1: 3, p2: 1 },
       requiresRevote: false
     });
+  });
+
+  it('records whether an exiled player was mafia for the next night announcement', () => {
+    const started = startGame(createGame({ roomId: 'room-1', players: fourPlayers }), () => 0);
+    const mafiaId = Object.entries(started.roleAssignments).find(([, role]) => role === 'mafia')?.[0];
+    if (!mafiaId) throw new Error('The four-player preset must include mafia.');
+    const voting = beginDayVote({ ...started, phase: 'day-briefing' });
+    const resolved = resolveDayVote(fourPlayers.reduce(
+      (game, player) => submitDayVote(game, player.id, player.id === mafiaId ? 'p1' : mafiaId),
+      voting
+    ));
+
+    expect(resolved.dayElimination).toEqual({ playerId: mafiaId, alignment: 'mafia' });
   });
 
   it('allows exactly one revote after a tie and eliminates nobody after a second tie', () => {
     const started = startGame(createGame({ roomId: 'room-1', players: fourPlayers }), () => 0);
     const voting = beginDayVote({ ...started, phase: 'day-briefing' });
-    const tied = ['p1', 'p1', 'p2', 'p2'].reduce(
+    const tied = ['p2', 'p1', 'p1', 'p2'].reduce(
       (game, targetId, index) => submitDayVote(game, fourPlayers[index].id, targetId),
       voting
     );
     const revote = resolveDayVote(tied);
-    const tiedAgain = ['p1', 'p1', 'p2', 'p2'].reduce(
+    const tiedAgain = ['p2', 'p1', 'p1', 'p2'].reduce(
       (game, targetId, index) => submitDayVote(game, fourPlayers[index].id, targetId),
       revote
     );
@@ -255,7 +275,7 @@ describe('day vote', () => {
     }
     const voting = beginDayVote({ ...started, phase: 'day-briefing' });
     const withVotes = fourPlayers.reduce(
-      (game, player) => submitDayVote(game, player.id, mafiaId),
+      (game, player) => submitDayVote(game, player.id, player.id === mafiaId ? 'p1' : mafiaId),
       voting
     );
 
@@ -274,7 +294,7 @@ describe('day vote', () => {
 
     const voting = beginDayVote({ ...started, phase: 'day-briefing' });
     const resolved = resolveDayVote(fourPlayers.reduce(
-      (game, player) => submitDayVote(game, player.id, citizenId),
+      (game, player) => submitDayVote(game, player.id, player.id === citizenId ? 'p1' : citizenId),
       voting
     ));
 
@@ -302,12 +322,12 @@ describe('automatic resignation', () => {
     const voting = beginDayVote({ ...started, phase: 'day-briefing' });
     const resigned = resignGamePlayer(voting, 'p4');
     const submitted = submitDayVote(
-      submitDayVote(submitDayVote(resigned, 'p1', 'p2'), 'p2', 'p2'),
+      submitDayVote(submitDayVote(resigned, 'p1', 'p2'), 'p2', 'p3'),
       'p3',
       'p2'
     );
 
     expect(() => submitDayVote(submitted, 'p4', 'p2')).toThrow('no longer active');
-    expect(resolveDayVote(submitted).dayVoteResult?.voteTotals).toEqual({ p2: 3 });
+    expect(resolveDayVote(submitted).dayVoteResult?.voteTotals).toEqual({ p2: 2, p3: 1 });
   });
 });

@@ -46,6 +46,7 @@ export function App() {
   const [policeResult, setPoliceResult] = useState<{ targetPlayerId: string; alignment: 'mafia' | 'citizen' } | null>(null);
   const [winner, setWinner] = useState<PublicGameState['winner'] | null>(null);
   const [eliminatedPlayerId, setEliminatedPlayerId] = useState<string | null>(null);
+  const [dayElimination, setDayElimination] = useState<NonNullable<PublicGameState['dayElimination']> | null>(null);
   const [nightResult, setNightResult] = useState<NonNullable<PublicGameState['nightResult']> | null>(null);
   const [voteTotals, setVoteTotals] = useState<Readonly<Record<string, number>> | null>(null);
   const [isSkipping, setIsSkipping] = useState(false);
@@ -66,6 +67,7 @@ export function App() {
     setPoliceResult(null);
     setWinner(null);
     setEliminatedPlayerId(null);
+    setDayElimination(null);
     setVoteTotals(null);
     setIsSkipping(false);
   }
@@ -120,6 +122,7 @@ export function App() {
       winner: nextWinner,
       eliminatedPlayerId: nextEliminatedPlayerId,
       voteTotals: nextVoteTotals,
+      dayElimination: nextDayElimination,
       nightResult: nextNightResult
     }: PublicGameState) => {
       if (revision < latestRevisionRef.current) {
@@ -137,6 +140,7 @@ export function App() {
       setGamePlayers(players);
       setWinner(nextWinner ?? null);
       setEliminatedPlayerId(nextEliminatedPlayerId ?? null);
+      setDayElimination(nextDayElimination ?? null);
       setNightResult(nextNightResult ?? null);
       setVoteTotals(nextVoteTotals ?? null);
     };
@@ -261,12 +265,15 @@ export function App() {
     if (!room || !socketRef.current?.connected) {
       return Promise.resolve(false);
     }
+    const revisionBeforeSubmit = latestRevisionRef.current;
 
     return new Promise((resolve) => socketRef.current!.emit(
       SOCKET_EVENTS.gameDayVote,
       { roomId: room.code, targetPlayerId },
       (response: GameCommandResponse) => {
-        if (!response.ok) setError('투표를 제출할 수 없습니다. 이미 투표했거나 현재 단계가 아닐 수 있습니다.');
+        if (!response.ok && latestRevisionRef.current <= revisionBeforeSubmit) {
+          setError('투표를 제출할 수 없습니다. 이미 투표했거나 현재 단계가 아닐 수 있습니다.');
+        }
         resolve(response.ok);
       }
     ));
@@ -382,7 +389,9 @@ export function App() {
               {gamePhase !== 'role-reveal' ? <aside className="game-players-panel">{gamePlayers.length > 0 ? <GamePlayerList players={gamePlayers} /> : null}</aside> : null}
               <PhaseWorkspace
                 eliminatedNickname={eliminatedNickname ?? null}
+                dayElimination={dayElimination}
                 nightResult={nightResult}
+                currentPlayerId={socketRef.current?.id ?? null}
                 canAct={gamePlayers.some((player) => player.id === socketRef.current?.id && player.status === 'alive')}
                 isHost={isHost}
                 mafiaPlayerIds={mafiaPlayerIds}

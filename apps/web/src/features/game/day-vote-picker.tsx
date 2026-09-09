@@ -2,10 +2,12 @@ import type { PublicGamePlayer } from '@marfia/contracts/socket-events';
 import { useState } from 'react';
 
 export function DayVotePicker({
+  currentPlayerId,
   players,
   onVote,
   isRevote = false
 }: {
+  currentPlayerId?: string | null;
   players: readonly PublicGamePlayer[];
   onVote: (targetPlayerId: string) => boolean | Promise<boolean>;
   isRevote?: boolean;
@@ -15,7 +17,7 @@ export function DayVotePicker({
   const [isSubmitted, setIsSubmitted] = useState(false);
 
   async function submitVote() {
-    if (!selectedPlayerId) return;
+    if (!selectedPlayerId || isSubmitting || isSubmitted) return;
     setIsSubmitting(true);
     try {
       if (await onVote(selectedPlayerId)) {
@@ -33,7 +35,7 @@ export function DayVotePicker({
       <h2 id="day-vote-heading">{isRevote ? '비공개 재투표' : '비공개 투표'}</h2>
       <p>{isRevote ? '동점입니다. 마피아를 다시 선택해주세요.' : '마피아를 선택해주세요. 개인 선택은 다른 참가자에게 공개되지 않습니다.'}</p>
       <div className="selection-grid">
-        {players.filter((player) => player.status === 'alive').map((player) => (
+        {players.filter((player) => player.status === 'alive' && player.id !== currentPlayerId).map((player) => (
           <button aria-pressed={selectedPlayerId === player.id} className="player-choice" disabled={isSubmitting || isSubmitted} key={player.id} onClick={() => setSelectedPlayerId(player.id)} type="button">
             {player.nickname}에게 투표{selectedPlayerId === player.id ? <span aria-hidden="true" className="selection-confirmed">선택됨</span> : null}
           </button>

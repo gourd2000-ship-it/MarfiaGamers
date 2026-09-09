@@ -305,7 +305,13 @@ describe('createRealtimeServer', () => {
     await expect(emitSkip(host, created.room.code, briefing.revision)).resolves.toEqual({ ok: true });
     await expect(dayVote).resolves.toMatchObject({ phase: 'day-vote' });
     const result = onceGameState(host);
-    await Promise.all(clients.map((client) => emitDayVote(client, created.room.code, mafia.client.id!)));
+    const alternateTargetId = clients.find((client) => client.id !== mafia.client.id)?.id;
+    if (!alternateTargetId) throw new Error('Expected a non-mafia vote target.');
+    await Promise.all(clients.map((client) => emitDayVote(
+      client,
+      created.room.code,
+      client.id === mafia.client.id ? alternateTargetId : mafia.client.id!
+    )));
     await expect(result).resolves.toMatchObject({ phase: 'result', winner: 'citizens' });
     clients.forEach((client) => client.close());
   });
@@ -742,13 +748,20 @@ describe('createRealtimeServer', () => {
       throw new Error('Expected a mafia client.');
     }
     const result = onceGameState(host);
-    await Promise.all(clients.map((client) => emitDayVote(client, created.room.code, mafia.client.id!)));
+    const alternateTargetId = clients.find((client) => client.id !== mafia.client.id)?.id;
+    if (!alternateTargetId) throw new Error('Expected a non-mafia vote target.');
+    await Promise.all(clients.map((client) => emitDayVote(
+      client,
+      created.room.code,
+      client.id === mafia.client.id ? alternateTargetId : mafia.client.id!
+    )));
 
     await expect(result).resolves.toMatchObject({
       phase: 'result',
       winner: 'citizens',
       eliminatedPlayerId: mafia.client.id,
-      voteTotals: { [mafia.client.id]: 4 }
+      dayElimination: { playerId: mafia.client.id, alignment: 'mafia' },
+      voteTotals: { [mafia.client.id]: 3, [alternateTargetId]: 1 }
     });
     expect(scheduled).toHaveLength(1);
 

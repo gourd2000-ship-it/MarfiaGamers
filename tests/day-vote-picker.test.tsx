@@ -7,6 +7,16 @@ import { DayVotePicker } from '../apps/web/src/features/game/day-vote-picker.js'
 describe('DayVotePicker', () => {
   afterEach(cleanup);
 
+  it('does not show the current player as an exile target', () => {
+    render(<DayVotePicker currentPlayerId="p1" onVote={() => true} players={[
+      { id: 'p1', nickname: '하늘', status: 'alive', isHost: false },
+      { id: 'p2', nickname: '바다', status: 'alive', isHost: false }
+    ]} />);
+
+    expect(screen.queryByRole('button', { name: '하늘에게 투표' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '바다에게 투표' })).toBeVisible();
+  });
+
   it('submits a secret ballot only after the voter confirms the selected player', async () => {
     const onVote = vi.fn().mockResolvedValue(true);
     render(<DayVotePicker players={[

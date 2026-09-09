@@ -666,6 +666,9 @@ function toPublicGameState(
     publicState.voteTotals = game.dayVoteResult.voteTotals;
     publicState.eliminatedPlayerId = game.dayVoteResult.eliminatedPlayerId;
   }
+  if (game.dayElimination && (game.phase === 'night-mafia' || (game.phase === 'result' && !game.nightResult))) {
+    publicState.dayElimination = game.dayElimination;
+  }
   if (game.nightResult && (game.phase === 'day-briefing' || game.phase === 'result')) {
     publicState.eliminatedPlayerId = game.nightResult.eliminatedPlayerId;
     publicState.nightResult = {

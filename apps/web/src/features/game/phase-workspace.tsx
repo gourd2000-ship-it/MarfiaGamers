@@ -1,6 +1,7 @@
 import type { GamePhase } from '@marfia/contracts/game-presets';
 import type { PrivateRole, PublicGamePlayer } from '@marfia/contracts/socket-events';
 import { DayVotePicker } from './day-vote-picker.js';
+import { DayEliminationNotice } from './day-elimination-notice.js';
 import { GameResultPanel } from './game-result-panel.js';
 import { MafiaTargetPicker } from './mafia-target-picker.js';
 import { NightResultNotice } from './night-result-notice.js';
@@ -17,6 +18,7 @@ export interface PhaseWorkspaceProps {
   policeResult: { targetPlayerId: string; alignment: 'mafia' | 'citizen' } | null;
   winner: 'mafia' | 'citizens' | null;
   eliminatedNickname: string | null;
+  dayElimination: { playerId: string; alignment: 'mafia' | 'citizen' } | null;
   nightResult: {
     mafiaTargetPlayerId: string | null;
     doctorTargetPlayerId: string | null;
@@ -25,6 +27,7 @@ export interface PhaseWorkspaceProps {
   voteTotals: Readonly<Record<string, number>> | null;
   isHost: boolean;
   canAct: boolean;
+  currentPlayerId: string | null;
   onMafiaTarget: (targetPlayerId: string) => boolean | Promise<boolean>;
   onDayVote: (targetPlayerId: string) => boolean | Promise<boolean>;
   onDoctorProtect: (targetPlayerId: string) => boolean | Promise<boolean>;
@@ -44,13 +47,14 @@ export function PhaseWorkspace(props: PhaseWorkspaceProps) {
       {phase === 'night-mafia' && props.canAct && props.role === 'mafia' ? (
         <MafiaTargetPicker excludedPlayerIds={props.mafiaPlayerIds} onSelect={props.onMafiaTarget} players={props.players} />
       ) : null}
+      {(phase === 'night-mafia' || phase === 'result') && props.dayElimination ? <DayEliminationNotice players={props.players} result={props.dayElimination} /> : null}
       {phase === 'night-doctor' && props.canAct && props.role === 'doctor' ? (
         <RoleActionPicker actionLabel="보호" description="보호할 한 명을 선택하세요. 자기 보호는 전체 게임에서 한 번만 가능합니다." heading="의사 행동" onSelect={props.onDoctorProtect} players={props.players} />
       ) : null}
       {phase === 'night-police' && props.canAct && props.role === 'police' ? (
         <RoleActionPicker actionLabel="조사" description="조사할 한 명을 선택하세요. 결과는 나에게만 표시됩니다." heading="경찰 행동" onSelect={props.onPoliceInvestigate} players={props.players} />
       ) : null}
-      {(phase === 'day-vote' || phase === 'day-revote') && props.canAct ? <DayVotePicker isRevote={phase === 'day-revote'} onVote={props.onDayVote} players={props.players} /> : null}
+      {(phase === 'day-vote' || phase === 'day-revote') && props.canAct ? <DayVotePicker currentPlayerId={props.currentPlayerId} isRevote={phase === 'day-revote'} onVote={props.onDayVote} players={props.players} /> : null}
       {(phase === 'day-briefing' || phase === 'result') && props.nightResult ? <NightResultNotice players={props.players} result={props.nightResult} /> : null}
       {phase === 'day-briefing' ? <p className="phase-instruction">밤 결과를 확인하고 낮 투표를 준비하세요.</p> : null}
       {props.voteTotals && (phase === 'day-briefing' || phase === 'day-revote') ? <VoteResultNotice players={props.players} voteTotals={props.voteTotals} /> : null}

@@ -105,6 +105,7 @@ export interface PublicGameState {
   players: readonly PublicGamePlayer[];
   voteTotals?: Record<string, number>;
   eliminatedPlayerId?: string | null;
+  dayElimination?: { playerId: string; alignment: 'mafia' | 'citizen' };
   nightResult?: {
     mafiaTargetPlayerId: string | null;
     doctorTargetPlayerId: string | null;

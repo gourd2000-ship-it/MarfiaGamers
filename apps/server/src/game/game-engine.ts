@@ -30,6 +30,7 @@ export interface GameState {
   };
   dayVotes: Readonly<Record<string, string>>;
   dayVoteResult?: { eliminatedPlayerId: string | null; voteTotals: Record<string, number>; requiresRevote: boolean };
+  dayElimination?: { playerId: string; alignment: 'mafia' | 'citizen' };
   eliminatedPlayerIds: readonly string[];
   resignedPlayerIds: readonly string[];
   winner?: 'mafia' | 'citizens';
@@ -214,6 +215,9 @@ export function submitDayVote(game: GameState, voterId: string, targetId: string
   if (!isActivePlayer(game, voterId) || !isActivePlayer(game, targetId)) {
     throw new Error('This player is no longer active and cannot vote or receive votes.');
   }
+  if (voterId === targetId) {
+    throw new Error('A player cannot vote for themselves.');
+  }
   if (game.dayVotes[voterId]) {
     throw new Error('This player already submitted a vote.');
   }
@@ -231,11 +235,18 @@ export function resolveDayVote(game: GameState): GameState {
     .map(([, targetId]) => targetId);
   const voteTotals = countTargets(activeVotes);
   const eliminatedPlayerId = uniqueHighestTarget(activeVotes);
+  const dayElimination = eliminatedPlayerId
+    ? {
+        playerId: eliminatedPlayerId,
+        alignment: game.roleAssignments[eliminatedPlayerId] === 'mafia' ? 'mafia' as const : 'citizen' as const
+      }
+    : undefined;
   const requiresRevote = game.phase === 'day-vote' && eliminatedPlayerId === null && Object.keys(voteTotals).length > 0;
 
   const resolved = {
     ...game,
     dayVoteResult: { eliminatedPlayerId, voteTotals, requiresRevote },
+    dayElimination,
     eliminatedPlayerIds: addEliminatedPlayer(game.eliminatedPlayerIds, eliminatedPlayerId),
     nightResult: undefined
   };

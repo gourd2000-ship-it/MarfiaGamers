@@ -14,7 +14,9 @@ function renderWorkspace(overrides: Partial<Parameters<typeof PhaseWorkspace>[0]
   const onLeave = vi.fn();
   render(<PhaseWorkspace
     eliminatedNickname={null}
+    dayElimination={null}
     nightResult={null}
+    currentPlayerId="p1"
     canAct={true}
     isHost={false}
     mafiaPlayerIds={[]}
@@ -100,6 +102,16 @@ describe('PhaseWorkspace', () => {
     expect(screen.getByRole('heading', { name: '밤 결과' })).toBeVisible();
     expect(screen.getByText('하늘님이 마피아에게 살해당했습니다.')).toBeVisible();
     expect(screen.getByText('의사는 바다님을 치료하였습니다.')).toBeVisible();
+  });
+
+  it('announces the exiled player and alignment as the next night starts', () => {
+    renderWorkspace({
+      dayElimination: { playerId: 'p2', alignment: 'citizen' },
+      phase: 'night-mafia'
+    });
+
+    expect(screen.getByText('바다님이 추방되었습니다.')).toBeVisible();
+    expect(screen.getByText('바다님은 시민입니다.')).toBeVisible();
   });
 
   it('keeps the night result visible when the night action ends the game', () => {
