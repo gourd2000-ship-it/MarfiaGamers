@@ -18,9 +18,10 @@ import {
 } from '@marfia/contracts/socket-events';
 import { ConnectionStatus, type ConnectionState } from './components/connection-status.js';
 import { CurrentPlayerBadge } from './components/current-player-badge.js';
-import { CreateRoomForm, type CreateRoomValues } from './features/lobby/create-room-form.js';
+import { type CreateRoomValues } from './features/lobby/create-room-form.js';
 import { InviteCard } from './features/lobby/invite-card.js';
 import { JoinRoomForm, type JoinRoomValues } from './features/lobby/join-room-form.js';
+import { LobbyEntryOptions } from './features/lobby/lobby-entry-options.js';
 import { LobbyParticipantList } from './features/lobby/lobby-participant-list.js';
 import { MafiaTeamNotice } from './features/game/mafia-team-notice.js';
 import { GamePlayerList } from './features/game/game-player-list.js';
@@ -435,10 +436,7 @@ export function App() {
       ) : inviteRoomCode ? (
         <JoinRoomForm onJoin={joinRoom} roomCode={inviteRoomCode} />
       ) : (
-        <div className="lobby-entry-options">
-          <CreateRoomForm onCreate={createRoom} />
-          <JoinRoomForm onJoin={joinRoom} />
-        </div>
+        <LobbyEntryOptions onCreate={createRoom} onJoin={joinRoom} />
       )}
         {error ? <p className="error-message" role="alert">{error}</p> : null}
       </div>

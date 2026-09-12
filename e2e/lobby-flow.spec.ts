@@ -5,6 +5,7 @@ test('the lobby fits compact mobile and tablet screens without horizontal scroll
     await page.setViewportSize(viewport);
     await page.goto('/');
     await expect(page.getByRole('status')).toHaveText('실시간 서버에 연결됨');
+    expect(await page.locator('.lobby-entry-options').getByRole('heading').allTextContents()).toEqual(['방 입장', '새 게임 만들기']);
 
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     expect(await page.getByRole('button', { name: '방 만들기' }).evaluate((button) => button.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
@@ -19,6 +20,7 @@ test('a student can create a QR room and another browser can join from its invit
   await page.getByRole('button', { name: '방 만들기' }).click();
 
   await expect(page.getByText('친구 초대하기')).toBeVisible();
+  await expect(page.getByText('방 번호:')).toContainText(/방 번호:\s*[A-F0-9]{8}/);
   const inviteUrl = await page.getByLabel('초대 링크').inputValue();
   expect(inviteUrl).toMatch(/^http:\/\/127\.0\.0\.1:5173\/room\/[A-F0-9]{8}\?token=[a-f0-9]{32}$/);
 

@@ -10,6 +10,7 @@ describe('InviteCard', () => {
   it('shows the shareable room URL and an accessible QR code', () => {
     render(<InviteCard inviteToken="0123456789abcdef0123456789abcdef" roomCode="ABCD1234" origin="https://mafia.school.example" />);
 
+    expect(screen.getByText(/방 번호:/)).toHaveTextContent('방 번호: ABCD1234');
     expect(screen.getByLabelText('초대 링크')).toHaveValue(
       'https://mafia.school.example/room/ABCD1234?token=0123456789abcdef0123456789abcdef'
     );

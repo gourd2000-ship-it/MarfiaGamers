@@ -37,6 +37,7 @@ export function InviteCard({ roomCode, inviteToken, origin }: InviteCardProps) {
     <section aria-labelledby="invite-heading" className="invite-card">
       <h2 id="invite-heading">친구 초대하기</h2>
       <p className="card-description">QR 코드를 스캔하거나 링크를 공유해 참여할 수 있어요.</p>
+      <p className="room-code">방 번호: <strong>{roomCode}</strong></p>
       <div className="invite-content">
         <QRCodeSVG
           aria-label="방 입장 QR 코드"
