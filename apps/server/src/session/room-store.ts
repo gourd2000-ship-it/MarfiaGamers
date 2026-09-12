@@ -3,6 +3,7 @@ import {
   createRoom,
   closeRoom,
   joinRoom,
+  rejoinRoom,
   resignPlayer,
   returnToLobby,
   startRoom,
@@ -26,7 +27,7 @@ export class RoomStore {
 
   join(
     code: string,
-    participant: { id: string; nickname: string }
+    participant: { id: string; nickname: string; socketId?: string; reconnectToken?: string }
   ): RoomSession | undefined {
     const room = this.rooms.get(code);
     if (!room) {
@@ -36,6 +37,31 @@ export class RoomStore {
     const updated = joinRoom(room, participant);
     this.rooms.set(code, updated);
     return updated;
+  }
+
+  rejoin(
+    code: string,
+    participant: { reconnectToken: string; socketId: string }
+  ): RoomSession | undefined {
+    const room = this.rooms.get(code);
+    if (!room) {
+      return undefined;
+    }
+
+    const updated = rejoinRoom(room, participant);
+    this.rooms.set(code, updated);
+    return updated;
+  }
+
+  findParticipantBySocketId(socketId: string): { room: RoomSession; playerId: string } | undefined {
+    for (const room of this.rooms.values()) {
+      const player = room.players.find((candidate) => candidate.socketId === socketId && candidate.status === 'active');
+      if (player) {
+        return { room, playerId: player.id };
+      }
+    }
+
+    return undefined;
   }
 
   start(code: string, playerId: string): RoomSession | undefined {

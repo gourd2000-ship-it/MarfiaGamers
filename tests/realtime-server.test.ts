@@ -133,7 +133,15 @@ describe('createRealtimeServer', () => {
   });
 
   it('broadcasts a resigned status to remaining room members after a disconnect', async () => {
-    const server = await createRealtimeServer();
+    let expireReconnectGrace: () => void = () => { throw new Error('Reconnect expiry was not scheduled.'); };
+    let resolveGraceScheduled: () => void = () => undefined;
+    const reconnectGraceScheduled = new Promise<void>((resolve) => { resolveGraceScheduled = resolve; });
+    const server = await createRealtimeServer({
+      scheduleReconnectExpiry: (callback) => {
+        expireReconnectGrace = callback;
+        resolveGraceScheduled();
+      }
+    });
     servers.push(server);
     const host = createClient(server.url, { transports: ['websocket'], forceNew: true });
     const player = createClient(server.url, { transports: ['websocket'], forceNew: true });
@@ -150,8 +158,10 @@ describe('createRealtimeServer', () => {
     }
     await emitJoin(player, { roomId: created.room.code, inviteToken: created.inviteToken, nickname: '하늘' });
 
-    const resignedState = waitForResignedPlayer(host, '하늘');
     player.close();
+    await reconnectGraceScheduled;
+    const resignedState = waitForResignedPlayer(host, '하늘');
+    expireReconnectGrace();
 
     const state = await resignedState;
     expect(state.playerCount).toBe(1);
@@ -179,8 +189,39 @@ describe('createRealtimeServer', () => {
     player.close();
   });
 
+  it('restores a disconnected participant to their original player identity with a valid reconnect token', async () => {
+    const server = await createRealtimeServer();
+    servers.push(server);
+    const host = createClient(server.url, { transports: ['websocket'], forceNew: true });
+    const player = createClient(server.url, { transports: ['websocket'], forceNew: true });
+    await Promise.all([waitForConnect(host), waitForConnect(player)]);
+    const created = await emitCreate(host, { name: '재접속 방', maxPlayers: 2, timerSeconds: 60, nickname: '방장' });
+    if (!created.ok) throw new Error('Room creation unexpectedly failed.');
+    const joined = await emitJoin(player, { roomId: created.room.code, nickname: '하늘' });
+    if (!joined.ok) throw new Error('Room join unexpectedly failed.');
+    const originalPlayerId = player.id;
+    const privateRoles = Promise.all([host, player].map(async (client) => ({ client, role: await oncePrivateRole(client) })));
+    await emitStart(host, created.room.code);
+    const originalRole = (await privateRoles).find(({ client }) => client === player)?.role;
+    if (!originalRole) throw new Error('Player role was not assigned.');
+
+    player.close();
+    const reconnectingPlayer = createClient(server.url, { transports: ['websocket'], forceNew: true });
+    await waitForConnect(reconnectingPlayer);
+    const recoveredRole = oncePrivateRole(reconnectingPlayer);
+    const rejoined = await emitRejoin(reconnectingPlayer, {
+      roomId: created.room.code,
+      reconnectToken: joined.reconnectToken
+    });
+
+    expect(rejoined).toMatchObject({ ok: true, playerId: originalPlayerId, room: { playerCount: 2 } });
+    await expect(recoveredRole).resolves.toMatchObject({ role: originalRole.role });
+    reconnectingPlayer.close();
+    host.close();
+  });
+
   it('does not resign a participant when a leave request names a different room', async () => {
-    const server = await createRealtimeServer({ schedule: () => undefined });
+    const server = await createRealtimeServer({ schedule: () => undefined, scheduleReconnectExpiry: (callback) => callback() });
     servers.push(server);
     const host = createClient(server.url, { transports: ['websocket'], forceNew: true });
     const player = createClient(server.url, { transports: ['websocket'], forceNew: true });
@@ -196,7 +237,10 @@ describe('createRealtimeServer', () => {
   });
 
   it('transfers host authority to the first remaining active participant after a disconnect', async () => {
-    const server = await createRealtimeServer({ schedule: () => undefined });
+    const server = await createRealtimeServer({
+      schedule: () => undefined,
+      scheduleReconnectExpiry: (callback) => callback()
+    });
     servers.push(server);
     const host = createClient(server.url, { transports: ['websocket'], forceNew: true });
     const players = Array.from({ length: 4 }, () => createClient(server.url, { transports: ['websocket'], forceNew: true }));
@@ -342,7 +386,7 @@ describe('createRealtimeServer', () => {
   });
 
   it('lets the host close a room and rejects future joins without retaining its game state', async () => {
-    const server = await createRealtimeServer();
+    const server = await createRealtimeServer({ scheduleReconnectExpiry: (callback) => callback() });
     servers.push(server);
     const host = createClient(server.url, { transports: ['websocket'], forceNew: true });
     const player = createClient(server.url, { transports: ['websocket'], forceNew: true });
@@ -402,7 +446,7 @@ describe('createRealtimeServer', () => {
   });
 
   it('publishes an in-game resignation to the remaining participants', async () => {
-    const server = await createRealtimeServer();
+    const server = await createRealtimeServer({ scheduleReconnectExpiry: (callback) => callback() });
     servers.push(server);
     const clients = Array.from({ length: 4 }, () => createClient(server.url, { transports: ['websocket'], forceNew: true }));
     const [host, ...players] = clients;
@@ -611,7 +655,8 @@ describe('createRealtimeServer', () => {
     const scheduled: Array<{ callback: () => void; delayMs: number }> = [];
     const server = await createRealtimeServer({
       random: () => 0.5,
-      schedule: (callback, delayMs) => { scheduled.push({ callback, delayMs }); }
+      schedule: (callback, delayMs) => { scheduled.push({ callback, delayMs }); },
+      scheduleReconnectExpiry: (callback) => callback()
     });
     servers.push(server);
     const clients = Array.from({ length: 5 }, () => createClient(server.url, { transports: ['websocket'], forceNew: true }));
@@ -776,6 +821,15 @@ function emitJoin(
 ): Promise<JoinRoomResponse> {
   return new Promise((resolve) => {
     client.emit(SOCKET_EVENTS.roomJoin, payload, resolve);
+  });
+}
+
+function emitRejoin(
+  client: ReturnType<typeof createClient>,
+  payload: unknown
+): Promise<unknown> {
+  return new Promise((resolve) => {
+    client.emit(SOCKET_EVENTS.roomRejoin, payload, resolve);
   });
 }
 

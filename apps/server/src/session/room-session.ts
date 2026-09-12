@@ -3,6 +3,8 @@ export type ParticipantStatus = 'active' | 'resigned';
 
 export interface RoomParticipant {
   id: string;
+  socketId?: string;
+  reconnectToken?: string;
   nickname: string;
   status: ParticipantStatus;
   isHost: boolean;
@@ -23,7 +25,7 @@ export interface CreateRoomInput {
   inviteToken: string;
   name: string;
   timerSeconds: number;
-  host: { id: string; nickname: string };
+  host: { id: string; nickname: string; socketId?: string; reconnectToken?: string };
 }
 
 export function createRoom(input: CreateRoomInput): RoomSession {
@@ -53,7 +55,7 @@ export function createRoom(input: CreateRoomInput): RoomSession {
 
 export function joinRoom(
   room: RoomSession,
-  participant: { id: string; nickname: string }
+  participant: { id: string; nickname: string; socketId?: string; reconnectToken?: string }
 ): RoomSession {
   if (room.status !== 'lobby') {
     throw new Error('The game has already started.');
@@ -74,8 +76,35 @@ export function joinRoom(
     ...room,
     players: [
       ...room.players,
-      { id: participant.id, nickname: normalizeNickname(participant.nickname), status: 'active', isHost: false }
+      {
+        id: participant.id,
+        nickname: normalizeNickname(participant.nickname),
+        reconnectToken: participant.reconnectToken,
+        socketId: participant.socketId,
+        status: 'active',
+        isHost: false
+      }
     ]
+  };
+}
+
+export function rejoinRoom(
+  room: RoomSession,
+  participant: { reconnectToken: string; socketId: string }
+): RoomSession {
+  const existing = room.players.find((player) => player.reconnectToken === participant.reconnectToken);
+  if (!existing || !existing.reconnectToken) {
+    throw new Error('A valid reconnect token is required.');
+  }
+  if (existing.status !== 'active') {
+    throw new Error('A resigned player cannot rejoin.');
+  }
+
+  return {
+    ...room,
+    players: room.players.map((player) =>
+      player.id === existing.id ? { ...player, socketId: participant.socketId } : player
+    )
   };
 }
 

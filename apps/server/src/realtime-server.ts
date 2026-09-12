@@ -1,6 +1,7 @@
+import { randomBytes } from 'node:crypto';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
-import { Server } from 'socket.io';
+import { Server, type Socket } from 'socket.io';
 import {
   SOCKET_EVENTS,
   closeRoomSchema,
@@ -11,6 +12,7 @@ import {
   leaveRoomSchema,
   mafiaTargetSchema,
   policeInvestigateSchema,
+  rejoinRoomSchema,
   rematchRoomSchema,
   returnToLobbySchema,
   skipPhaseSchema,
@@ -20,6 +22,7 @@ import {
   type PrivateRole,
   type PublicRoomState,
   type RoomSummary,
+  type RejoinRoomResponse,
   type ServerToClientEvents
 } from '@marfia/contracts/socket-events';
 import { RoomStore } from './session/room-store.js';
@@ -38,6 +41,7 @@ export interface RealtimeServerOptions {
   now?: () => number;
   schedule?: (callback: () => void, delayMs: number) => void;
   random?: () => number;
+  scheduleReconnectExpiry?: (callback: () => void, delayMs: number) => void;
 }
 
 export async function createRealtimeServer(
@@ -55,6 +59,10 @@ export async function createRealtimeServer(
   });
   const allowedOrigins = toAllowedOrigins(options.corsOrigin);
   const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
+    connectionStateRecovery: {
+      maxDisconnectionDuration: 60_000,
+      skipMiddlewares: false
+    },
     cors: {
       origin: options.corsOrigin === undefined
         ? true
@@ -73,6 +81,38 @@ export async function createRealtimeServer(
   const schedule = options.schedule ?? ((callback, delayMs) => { setTimeout(callback, delayMs); });
   const now = options.now ?? Date.now;
   const random = options.random ?? Math.random;
+  const pendingReconnects = new Map<string, true>();
+  const scheduleReconnectExpiry = options.scheduleReconnectExpiry
+    ?? ((callback: () => void, delayMs: number) => {
+      const timer = setTimeout(callback, delayMs);
+      timer.unref();
+      return timer;
+    });
+
+  const clearReconnectExpiry = (playerId: string) => {
+    pendingReconnects.delete(playerId);
+  };
+
+  const deferResignation = (playerId: string) => {
+    clearReconnectExpiry(playerId);
+    pendingReconnects.set(playerId, true);
+    const expire = () => {
+      if (!pendingReconnects.has(playerId)) {
+        return;
+      }
+      pendingReconnects.delete(playerId);
+      const room = rooms.resign(playerId);
+      if (room) {
+        publishResignation(room, playerId);
+      }
+    };
+    scheduleReconnectExpiry(expire, 60_000);
+  };
+
+  const playerIdForRoom = (socketId: string, roomId: string): string | undefined => {
+    const participant = rooms.findParticipantBySocketId(socketId);
+    return participant?.room.code === roomId ? participant.playerId : undefined;
+  };
 
   const advanceRoomPhase = (room: RoomSession, current: GameState, revision: number) => {
     const next = shouldResolveNight(current)
@@ -171,8 +211,32 @@ export async function createRealtimeServer(
       const payload: PrivateRole = role === 'mafia'
         ? { role, mafiaPlayerIds }
         : { role };
-      io.to(player.id).emit(SOCKET_EVENTS.gamePrivateRole, payload);
+      if (player.socketId) {
+        io.to(player.socketId).emit(SOCKET_EVENTS.gamePrivateRole, payload);
+      }
     }
+  };
+
+  const synchronizeParticipant = (
+    socket: Socket<ClientToServerEvents, ServerToClientEvents>,
+    room: RoomSession,
+    playerId: string
+  ) => {
+    socket.emit(SOCKET_EVENTS.roomState, toPublicRoomState(room));
+    const game = games.get(room.code);
+    const revision = revisions.get(room.code);
+    if (!game || revision === undefined) {
+      return;
+    }
+    socket.emit(SOCKET_EVENTS.gamePublicState, toPublicGameState(room, game, revision, phaseEndsAt.get(room.code) ?? null));
+    const role = game.roleAssignments[playerId];
+    if (!role) {
+      return;
+    }
+    const mafiaPlayerIds = Object.entries(game.roleAssignments)
+      .filter(([, assignedRole]) => assignedRole === 'mafia')
+      .map(([assignedPlayerId]) => assignedPlayerId);
+    socket.emit(SOCKET_EVENTS.gamePrivateRole, role === 'mafia' ? { role, mafiaPlayerIds } : { role });
   };
 
   io.on('connection', (socket) => {
@@ -180,6 +244,13 @@ export async function createRealtimeServer(
       status: 'connected',
       sessionId: socket.id
     });
+    if (socket.recovered) {
+      const participant = rooms.findParticipantBySocketId(socket.id);
+      if (participant) {
+        clearReconnectExpiry(participant.playerId);
+        synchronizeParticipant(socket, participant.room, participant.playerId);
+      }
+    }
 
     socket.on(SOCKET_EVENTS.roomCreate, (payload, acknowledge) => {
       const respond = safelyAcknowledge(acknowledge);
@@ -195,9 +266,13 @@ export async function createRealtimeServer(
           nickname: parsed.data.nickname,
           timerSeconds: parsed.data.timerSeconds
         };
-        const room = rooms.create({ ...roomInput, host: { id: socket.id, nickname: roomInput.nickname } });
+        const reconnectToken = randomBytes(16).toString('hex');
+        const room = rooms.create({
+          ...roomInput,
+          host: { id: socket.id, socketId: socket.id, reconnectToken, nickname: roomInput.nickname }
+        });
         socket.join(room.code);
-        respond({ ok: true, room: toRoomSummary(room), inviteToken: room.inviteToken });
+        respond({ ok: true, room: toRoomSummary(room), inviteToken: room.inviteToken, reconnectToken, playerId: socket.id });
         io.to(room.code).emit(SOCKET_EVENTS.roomState, toPublicRoomState(room));
       } catch {
         respond({ ok: false, code: 'room-unavailable' });
@@ -213,8 +288,11 @@ export async function createRealtimeServer(
       }
 
       try {
+        const reconnectToken = randomBytes(16).toString('hex');
         const room = rooms.join(parsed.data.roomId, {
           id: socket.id,
+          socketId: socket.id,
+          reconnectToken,
           nickname: parsed.data.nickname
         });
         if (!room) {
@@ -227,9 +305,46 @@ export async function createRealtimeServer(
           ok: true,
           room: toRoomSummary(room),
           nickname: parsed.data.nickname.trim(),
-          sessionId: socket.id
+          sessionId: socket.id,
+          reconnectToken,
+          playerId: socket.id
         });
         io.to(room.code).emit(SOCKET_EVENTS.roomState, toPublicRoomState(room));
+      } catch {
+        respond({ ok: false, code: 'room-rejected' });
+      }
+    });
+
+    socket.on(SOCKET_EVENTS.roomRejoin, (payload, acknowledge) => {
+      const respond = safelyAcknowledge<RejoinRoomResponse>(acknowledge);
+      const parsed = rejoinRoomSchema.safeParse(payload);
+      if (!parsed.success) {
+        respond({ ok: false, code: 'invalid-payload' });
+        return;
+      }
+
+      const current = rooms.get(parsed.data.roomId);
+      const player = current?.players.find((candidate) => candidate.reconnectToken === parsed.data.reconnectToken);
+      if (!current || !player) {
+        respond({ ok: false, code: 'room-not-found' });
+        return;
+      }
+      if (!pendingReconnects.has(player.id)) {
+        respond({ ok: false, code: 'room-rejected' });
+        return;
+      }
+
+      try {
+        const room = rooms.rejoin(parsed.data.roomId, { reconnectToken: parsed.data.reconnectToken, socketId: socket.id });
+        if (!room) {
+          respond({ ok: false, code: 'room-not-found' });
+          return;
+        }
+        clearReconnectExpiry(player.id);
+        socket.join(room.code);
+        respond({ ok: true, room: toRoomSummary(room), nickname: player.nickname, playerId: player.id });
+        io.to(room.code).emit(SOCKET_EVENTS.roomState, toPublicRoomState(room));
+        synchronizeParticipant(socket, room, player.id);
       } catch {
         respond({ ok: false, code: 'room-rejected' });
       }
@@ -244,7 +359,7 @@ export async function createRealtimeServer(
       }
 
       try {
-        const room = rooms.start(parsed.data.roomId, socket.id);
+        const room = rooms.start(parsed.data.roomId, playerIdForRoom(socket.id, parsed.data.roomId) ?? '');
         if (!room) {
           respond({ ok: false, code: 'room-not-found' });
           return;
@@ -281,7 +396,7 @@ export async function createRealtimeServer(
       const room = rooms.get(parsed.data.roomId);
       const game = games.get(parsed.data.roomId);
       const revision = revisions.get(parsed.data.roomId);
-      const requester = room?.players.find((player) => player.id === socket.id);
+      const requester = room?.players.find((player) => player.id === playerIdForRoom(socket.id, parsed.data.roomId));
       if (!room || !game || revision === undefined) {
         respond({ ok: false, code: 'game-not-found' });
         return;
@@ -308,7 +423,7 @@ export async function createRealtimeServer(
       }
 
       try {
-        const room = rooms.close(parsed.data.roomId, socket.id);
+        const room = rooms.close(parsed.data.roomId, playerIdForRoom(socket.id, parsed.data.roomId) ?? '');
         if (!room) {
           respond({ ok: false, code: 'room-not-found' });
           return;
@@ -343,7 +458,7 @@ export async function createRealtimeServer(
       }
 
       try {
-        const room = rooms.returnToLobby(parsed.data.roomId, socket.id);
+        const room = rooms.returnToLobby(parsed.data.roomId, playerIdForRoom(socket.id, parsed.data.roomId) ?? '');
         if (!room) {
           respond({ ok: false, code: 'room-not-found' });
           return;
@@ -367,17 +482,18 @@ export async function createRealtimeServer(
       }
 
       const requestedRoom = rooms.get(parsed.data.roomId);
-      if (!requestedRoom?.players.some((player) => player.id === socket.id && player.status === 'active')) {
+      const playerId = playerIdForRoom(socket.id, parsed.data.roomId);
+      if (!requestedRoom || !playerId) {
         respond({ ok: false, code: 'room-not-found' });
         return;
       }
-      const room = rooms.resign(socket.id);
+      const room = rooms.resign(playerId);
       if (!room) {
         respond({ ok: false, code: 'room-not-found' });
         return;
       }
       socket.leave(room.code);
-      publishResignation(room, socket.id);
+      publishResignation(room, playerId);
       respond({ ok: true });
     });
 
@@ -391,7 +507,7 @@ export async function createRealtimeServer(
 
       const room = rooms.get(parsed.data.roomId);
       const previousGame = games.get(parsed.data.roomId);
-      const requester = room?.players.find((player) => player.id === socket.id);
+      const requester = room?.players.find((player) => player.id === playerIdForRoom(socket.id, parsed.data.roomId));
       if (!room || !previousGame) {
         respond({ ok: false, code: 'room-not-found' });
         return;
@@ -438,7 +554,9 @@ export async function createRealtimeServer(
       }
 
       try {
-        const updated = submitMafiaVote(game, socket.id, parsed.data.targetPlayerId);
+        const playerId = playerIdForRoom(socket.id, parsed.data.roomId);
+        if (!playerId) throw new Error('Player is not connected to this room.');
+        const updated = submitMafiaVote(game, playerId, parsed.data.targetPlayerId);
         games.set(parsed.data.roomId, updated);
         advanceAfterAllRequiredSubmissions(room, updated);
         respond({ ok: true });
@@ -463,7 +581,9 @@ export async function createRealtimeServer(
       }
 
       try {
-        const updated = submitDoctorProtection(game, socket.id, parsed.data.targetPlayerId);
+        const playerId = playerIdForRoom(socket.id, parsed.data.roomId);
+        if (!playerId) throw new Error('Player is not connected to this room.');
+        const updated = submitDoctorProtection(game, playerId, parsed.data.targetPlayerId);
         games.set(parsed.data.roomId, updated);
         advanceAfterAllRequiredSubmissions(room, updated);
         respond({ ok: true });
@@ -488,7 +608,9 @@ export async function createRealtimeServer(
       }
 
       try {
-        const updated = submitPoliceInvestigation(game, socket.id, parsed.data.targetPlayerId);
+        const playerId = playerIdForRoom(socket.id, parsed.data.roomId);
+        if (!playerId) throw new Error('Player is not connected to this room.');
+        const updated = submitPoliceInvestigation(game, playerId, parsed.data.targetPlayerId);
         games.set(parsed.data.roomId, updated);
         const result = updated.policeResult;
         if (!result) {
@@ -521,7 +643,9 @@ export async function createRealtimeServer(
       }
 
       try {
-        const updated = submitDayVote(game, socket.id, parsed.data.targetPlayerId);
+        const playerId = playerIdForRoom(socket.id, parsed.data.roomId);
+        if (!playerId) throw new Error('Player is not connected to this room.');
+        const updated = submitDayVote(game, playerId, parsed.data.targetPlayerId);
         games.set(parsed.data.roomId, updated);
         advanceAfterAllRequiredSubmissions(room, updated);
         respond({ ok: true });
@@ -531,9 +655,9 @@ export async function createRealtimeServer(
     });
 
     socket.on('disconnect', () => {
-      const room = rooms.resign(socket.id);
-      if (room) {
-        publishResignation(room, socket.id);
+      const participant = rooms.findParticipantBySocketId(socket.id);
+      if (participant) {
+        deferResignation(participant.playerId);
       }
     });
   });

@@ -3,6 +3,7 @@ import {
   createRoom,
   closeRoom,
   joinRoom,
+  rejoinRoom,
   resignPlayer,
   startRoom
 } from '../apps/server/src/session/room-session.js';
@@ -21,6 +22,30 @@ const createFourPlayerRoom = () => {
 };
 
 describe('room session', () => {
+  it('restores an active participant to a new socket only with their reconnect token', () => {
+    const room = createRoom({
+      code: '123456',
+      inviteToken: '0123456789abcdef0123456789abcdef',
+      name: '재접속 방',
+      timerSeconds: 60,
+      host: { id: 'host', nickname: '방장', reconnectToken: 'host-reconnect-token', socketId: 'socket-host' }
+    });
+    const joined = joinRoom(room, {
+      id: 'p2', nickname: '하늘', reconnectToken: 'player-reconnect-token', socketId: 'socket-player'
+    });
+
+    const rejoined = rejoinRoom(joined, {
+      reconnectToken: 'player-reconnect-token', socketId: 'socket-player-reconnected'
+    });
+
+    expect(rejoined.players.find((player) => player.id === 'p2')).toMatchObject({
+      id: 'p2', socketId: 'socket-player-reconnected', status: 'active'
+    });
+    expect(() => rejoinRoom(joined, {
+      reconnectToken: 'wrong-token', socketId: 'socket-attacker'
+    })).toThrow('reconnect token');
+  });
+
   it('requires a six-digit numeric room code', () => {
     const input = {
       inviteToken: '0123456789abcdef0123456789abcdef',

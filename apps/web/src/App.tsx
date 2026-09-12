@@ -7,11 +7,12 @@ import {
   type CloseRoomResponse,
   type GameCommandResponse,
   type JoinRoomResponse,
+  type RejoinRoomResponse,
   type PrivateRole,
   type PublicGameState,
   type PublicGamePlayer,
   type PublicRoomState,
-  type RoomSummary,
+  type RoomSummary as RoomSummaryState,
   type ReturnToLobbyResponse,
   type ServerToClientEvents,
   type StartRoomResponse
@@ -23,11 +24,11 @@ import { InviteCard } from './features/lobby/invite-card.js';
 import { JoinRoomForm, type JoinRoomValues } from './features/lobby/join-room-form.js';
 import { LobbyEntryOptions } from './features/lobby/lobby-entry-options.js';
 import { LobbyParticipantList } from './features/lobby/lobby-participant-list.js';
+import { RoomSummary } from './features/lobby/room-summary.js';
 import { MafiaTeamNotice } from './features/game/mafia-team-notice.js';
 import { GamePlayerList } from './features/game/game-player-list.js';
 import { GameStatusBar } from './features/game/game-status-bar.js';
 import { PhaseWorkspace } from './features/game/phase-workspace.js';
-import { PhaseStatus } from './features/game/phase-status.js';
 
 export function App() {
   const socketUrl = import.meta.env.VITE_SOCKET_URL ?? window.location.origin;
@@ -35,10 +36,13 @@ export function App() {
   const latestRevisionRef = useRef(0);
   const hadRoomRef = useRef(false);
   const [connectionState, setConnectionState] = useState<ConnectionState>('connecting');
-  const [room, setRoom] = useState<RoomSummary | null>(null);
+  const [room, setRoom] = useState<RoomSummaryState | null>(null);
+  const roomRef = useRef<RoomSummaryState | null>(null);
   const [lobbyPlayers, setLobbyPlayers] = useState<PublicRoomState['players']>([]);
   const [inviteToken, setInviteToken] = useState<string | null>(null);
   const [isHost, setIsHost] = useState(false);
+  const [playerId, setPlayerId] = useState<string | null>(null);
+  const playerIdRef = useRef<string | null>(null);
   const [privateRole, setPrivateRole] = useState<PrivateRole['role'] | null>(null);
   const [mafiaPlayerIds, setMafiaPlayerIds] = useState<readonly string[]>([]);
   const [gamePhase, setGamePhase] = useState<PublicGameState['phase'] | null>(null);
@@ -53,9 +57,19 @@ export function App() {
   const [isSkipping, setIsSkipping] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inviteRoomCode = roomCodeFromPath(window.location.pathname);
-  const currentPlayerNickname = lobbyPlayers.find((player) => player.id === socketRef.current?.id)?.nickname
-    ?? gamePlayers.find((player) => player.id === socketRef.current?.id)?.nickname
+  const currentPlayerNickname = lobbyPlayers.find((player) => player.id === playerId)?.nickname
+    ?? gamePlayers.find((player) => player.id === playerId)?.nickname
     ?? null;
+
+  function setCurrentRoom(nextRoom: RoomSummaryState | null) {
+    roomRef.current = nextRoom;
+    setRoom(nextRoom);
+  }
+
+  function setCurrentPlayerId(nextPlayerId: string | null) {
+    playerIdRef.current = nextPlayerId;
+    setPlayerId(nextPlayerId);
+  }
 
   function resetGameState() {
     latestRevisionRef.current = 0;
@@ -75,10 +89,13 @@ export function App() {
   function resetRoomState(message: string) {
     hadRoomRef.current = false;
     resetGameState();
-    setRoom(null);
+    const activeRoom = roomRef.current;
+    if (activeRoom) clearReconnectToken(activeRoom.code);
+    setCurrentRoom(null);
     setLobbyPlayers([]);
     setInviteToken(null);
     setIsHost(false);
+    setCurrentPlayerId(null);
     setError(message);
     window.history.replaceState({}, '', '/');
   }
@@ -86,12 +103,16 @@ export function App() {
   useEffect(() => {
     const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(socketUrl);
     socketRef.current = socket;
-    const onConnect = () => setConnectionState('connected');
+    const onConnect = () => {
+      setConnectionState('connected');
+      const activeRoom = roomRef.current;
+      const reconnectToken = activeRoom ? readReconnectToken(activeRoom.code) : null;
+      if (activeRoom && reconnectToken && !socket.recovered) {
+        rejoinRoom(activeRoom.code, reconnectToken);
+      }
+    };
     const onDisconnect = () => {
       setConnectionState('reconnecting');
-      if (hadRoomRef.current) {
-        resetRoomState('연결이 끊어져 자동 기권 처리되었습니다. 새 방에 참여해 주세요.');
-      }
     };
     const onConnectError = () => setConnectionState('error');
     const onRoomState = (nextRoom: PublicRoomState) => {
@@ -104,10 +125,10 @@ export function App() {
       if (nextRoom.status === 'lobby') {
         resetGameState();
       }
-      setRoom(nextRoom);
+      setCurrentRoom(nextRoom);
       setLobbyPlayers(nextRoom.players);
       setIsHost(nextRoom.players.some((player) =>
-        player.id === socket.id && player.status === 'active' && player.isHost
+        player.id === playerIdRef.current && player.status === 'active' && player.isHost
       ));
     };
     const onPrivateRole = ({ role, mafiaPlayerIds: nextMafiaPlayerIds }: PrivateRole) => {
@@ -182,9 +203,11 @@ export function App() {
         return;
       }
 
-      setRoom(response.room);
-      setLobbyPlayers([{ id: socketRef.current?.id ?? 'local-host', nickname: values.nickname.trim(), status: 'active', isHost: true }]);
+      setCurrentRoom(response.room);
+      setLobbyPlayers([{ id: response.playerId, nickname: values.nickname.trim(), status: 'active', isHost: true }]);
       setInviteToken(response.inviteToken);
+      setCurrentPlayerId(response.playerId);
+      saveReconnectToken(response.room.code, response.reconnectToken);
       setIsHost(true);
       hadRoomRef.current = true;
     });
@@ -201,7 +224,7 @@ export function App() {
         return;
       }
 
-      setRoom(response.room);
+      setCurrentRoom(response.room);
     });
   }
 
@@ -212,6 +235,12 @@ export function App() {
       return;
     }
 
+    const reconnectToken = readReconnectToken(values.roomId);
+    if (reconnectToken) {
+      rejoinRoom(values.roomId, reconnectToken);
+      return;
+    }
+
     socketRef.current.emit(SOCKET_EVENTS.roomJoin, values, (response: JoinRoomResponse) => {
       if (!response.ok) {
         setError('방에 입장할 수 없습니다. 방 코드와 게임 상태를 확인해 주세요.');
@@ -219,7 +248,28 @@ export function App() {
       }
 
       setIsHost(false);
-      setRoom(response.room);
+      setCurrentRoom(response.room);
+      setInviteToken(null);
+      setCurrentPlayerId(response.playerId);
+      saveReconnectToken(response.room.code, response.reconnectToken);
+      hadRoomRef.current = true;
+    });
+  }
+
+  function rejoinRoom(roomId: string, reconnectToken: string) {
+    if (!socketRef.current?.connected) {
+      return;
+    }
+
+    socketRef.current.emit(SOCKET_EVENTS.roomRejoin, { roomId, reconnectToken }, (response: RejoinRoomResponse) => {
+      if (!response.ok) {
+        clearReconnectToken(roomId);
+        resetRoomState('재접속 시간이 만료되었거나 이 기기에서 이어할 수 없습니다.');
+        return;
+      }
+
+      setCurrentRoom(response.room);
+      setCurrentPlayerId(response.playerId);
       setInviteToken(null);
       hadRoomRef.current = true;
     });
@@ -380,10 +430,7 @@ export function App() {
       <div className={room ? 'app-content has-room' : 'app-content'}>
         {room ? (
           <section className="room-board" aria-label={`${room.name} 게임 보드`}>
-            <div className="room-summary">
-              {gamePhase ? <PhaseStatus phase={gamePhase} /> : <p>{room.name} 방이 만들어졌습니다. 친구가 2명 이상 모이면 게임을 시작할 수 있습니다.</p>}
-              <p>현재 입장 인원: <strong>{room.playerCount}명</strong></p>
-            </div>
+            <RoomSummary phase={gamePhase} room={room} />
           {gamePhase ? (
             <div className={`game-board-layout ${gamePhase === 'role-reveal' ? 'is-role-reveal' : ''}`}>
               {gamePhase !== 'role-reveal' ? <aside className="game-players-panel">{gamePlayers.length > 0 ? <GamePlayerList players={gamePlayers} /> : null}</aside> : null}
@@ -391,8 +438,8 @@ export function App() {
                 eliminatedNickname={eliminatedNickname ?? null}
                 dayElimination={dayElimination}
                 nightResult={nightResult}
-                currentPlayerId={socketRef.current?.id ?? null}
-                canAct={gamePlayers.some((player) => player.id === socketRef.current?.id && player.status === 'alive')}
+                currentPlayerId={playerId}
+                canAct={gamePlayers.some((player) => player.id === playerId && player.status === 'alive')}
                 isHost={isHost}
                 mafiaPlayerIds={mafiaPlayerIds}
                 onClose={closeRoom}
@@ -447,4 +494,32 @@ export function App() {
 function roomCodeFromPath(pathname: string): string | null {
   const match = /^\/room\/(\d{6})$/.exec(pathname);
   return match?.[1] ?? null;
+}
+
+function reconnectStorageKey(roomCode: string): string {
+  return `marfia:reconnect:${roomCode}`;
+}
+
+function saveReconnectToken(roomCode: string, reconnectToken: string) {
+  try {
+    window.sessionStorage.setItem(reconnectStorageKey(roomCode), reconnectToken);
+  } catch {
+    // Reconnection still works in the current Socket session when browser storage is unavailable.
+  }
+}
+
+function readReconnectToken(roomCode: string): string | null {
+  try {
+    return window.sessionStorage.getItem(reconnectStorageKey(roomCode));
+  } catch {
+    return null;
+  }
+}
+
+function clearReconnectToken(roomCode: string) {
+  try {
+    window.sessionStorage.removeItem(reconnectStorageKey(roomCode));
+  } catch {
+    // There is no stored token to clear when browser storage is unavailable.
+  }
 }

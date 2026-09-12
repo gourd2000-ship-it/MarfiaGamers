@@ -13,6 +13,7 @@ export const SOCKET_EVENTS = {
   gameSkipPhase: 'game:skip-phase',
   roomCreate: 'room:create',
   roomJoin: 'room:join',
+  roomRejoin: 'room:rejoin',
   roomLeave: 'room:leave',
   roomClose: 'room:close',
   roomRematch: 'room:rematch',
@@ -32,6 +33,11 @@ export const createRoomSchema = z.object({
 export const joinRoomSchema = z.object({
   roomId: z.string().trim().regex(/^\d{6}$/),
   nickname: z.string().trim().min(1).max(20)
+});
+
+export const rejoinRoomSchema = z.object({
+  roomId: z.string().trim().regex(/^\d{6}$/),
+  reconnectToken: z.string().regex(/^[a-f0-9]{32}$/)
 });
 
 export const startRoomSchema = z.object({
@@ -119,7 +125,7 @@ export interface PrivateRole {
 }
 
 export type CreateRoomResponse =
-  | { ok: true; room: RoomSummary; inviteToken: string }
+  | { ok: true; room: RoomSummary; inviteToken: string; reconnectToken: string; playerId: string }
   | { ok: false; code: 'invalid-payload' | 'room-unavailable' };
 
 export type JoinRoomResponse =
@@ -128,11 +134,17 @@ export type JoinRoomResponse =
       room: RoomSummary;
       nickname: string;
       sessionId: string;
+      reconnectToken: string;
+      playerId: string;
     }
   | {
       ok: false;
       code: 'invalid-payload' | 'room-not-found' | 'room-rejected';
     };
+
+export type RejoinRoomResponse =
+  | { ok: true; room: RoomSummary; nickname: string; playerId: string }
+  | { ok: false; code: 'invalid-payload' | 'room-not-found' | 'room-rejected' };
 
 export type StartRoomResponse =
   | { ok: true; room: RoomSummary }
@@ -158,6 +170,10 @@ export interface ClientToServerEvents {
   'room:join': (
     payload: unknown,
     acknowledge?: (response: JoinRoomResponse) => void
+  ) => void;
+  'room:rejoin': (
+    payload: unknown,
+    acknowledge?: (response: RejoinRoomResponse) => void
   ) => void;
   'room:start': (
     payload: unknown,
